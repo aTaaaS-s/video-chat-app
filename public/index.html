@@ -4,7 +4,100 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Видеочат</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: Arial, sans-serif; 
+      background: #1a1a2e; 
+      color: white; 
+      padding: 20px;
+    }
+    .container { max-width: 1000px; margin: 0 auto; }
+    h1 { text-align: center; margin-bottom: 20px; }
+    
+    #login { max-width: 400px; margin: 50px auto; text-align: center; }
+    #login input { 
+      padding: 15px; 
+      width: 100%; 
+      margin-bottom: 10px;
+      border-radius: 8px;
+      border: 2px solid #667eea;
+      background: rgba(255,255,255,0.1);
+      color: white;
+      font-size: 16px;
+    }
+    #login button { 
+      padding: 15px 30px; 
+      background: #667eea; 
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 100%;
+    }
+    
+    #chat { display: none; }
+    .info { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      margin-bottom: 20px;
+      padding: 15px;
+      background: rgba(102, 126, 234, 0.2);
+      border-radius: 10px;
+    }
+    
+    #videos { 
+      display: grid; 
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+      gap: 15px; 
+      margin-bottom: 20px;
+    }
+    .video-wrap { 
+      position: relative; 
+      background: #000; 
+      border-radius: 10px; 
+      overflow: hidden;
+      aspect-ratio: 4/3;
+    }
+    .video-wrap video { width: 100%; height: 100%; object-fit: cover; }
+    .video-wrap.mirror video { transform: scaleX(-1); }
+    .user-label { 
+      position: absolute; 
+      bottom: 10px; 
+      left: 10px; 
+      background: rgba(0,0,0,0.7); 
+      padding: 5px 10px; 
+      border-radius: 5px;
+      font-size: 14px;
+    }
+    
+    .controls { display: flex; gap: 10px; margin-bottom: 20px; }
+    .controls button { 
+      flex: 1; 
+      padding: 15px; 
+      border: none; 
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      background: rgba(255,255,255,0.2);
+      color: white;
+    }
+    .controls button.active { background: #e53e3e; }
+    .controls button.success { background: #48bb78; }
+    
+    #log { 
+      background: #000; 
+      padding: 10px; 
+      border-radius: 8px; 
+      max-height: 200px; 
+      overflow-y: auto;
+      font-size: 12px;
+      font-family: monospace;
+    }
+    #log div { padding: 2px 0; border-bottom: 1px solid #333; }
+  </style>
 </head>
 <body>
   <div class="container">
@@ -12,13 +105,13 @@
     
     <div id="login">
       <input type="text" id="nameInput" placeholder="Ваше имя">
-      <button onclick="join()">📹 Войти</button>
+      <button onclick="joinChat()">📹 Войти</button>
     </div>
 
-    <div id="chat" style="display:none">
+    <div id="chat">
       <div class="info">
         <div>👥 Участников: <span id="count">1</span></div>
-        <button onclick="copyLink()" class="btn-copy">📋 Ссылка</button>
+        <button onclick="copyLink()" style="padding:8px 15px;background:#667eea;border:none;color:white;border-radius:5px;cursor:pointer;">📋 Ссылка</button>
       </div>
       
       <div id="videos"></div>
@@ -34,6 +127,215 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="client.js"></script>
+  <script>
+    const socket = io();
+    let localStream = null;
+    let peerConnections = {};
+    let userName = null;
+
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
+      ]
+    };
+
+    function log(msg) {
+      const div = document.createElement('div');
+      div.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
+      document.getElementById('log').appendChild(div);
+      document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+      console.log(msg);
+    }
+
+    // ГЛОБАЛЬНАЯ ФУНКЦИЯ
+    async function joinChat() {
+      userName = document.getElementById('nameInput').value.trim() || 'User';
+      
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        
+        log('✅ Доступ получен');
+        addVideo(localStream, userName, true);
+        
+        document.getElementById('login').style.display = 'none';
+        document.getElementById('chat').style.display = 'block';
+        
+        socket.emit('join', { name: userName });
+        log('📤 Join отправлен');
+        
+        startAudioMonitoring();
+        
+      } catch (err) {
+        alert('Ошибка: ' + err.message);
+      }
+    }
+
+    function addVideo(stream, id, isLocal) {
+      if (document.getElementById('video-' + id)) return;
+      
+      log('🎬 Видео: ' + (isLocal ? 'ваше' : id));
+      
+      const wrap = document.createElement('div');
+      wrap.className = 'video-wrap' + (isLocal ? ' mirror' : '');
+      wrap.id = 'video-' + id;
+      
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = isLocal;
+      
+      const label = document.createElement('div');
+      label.className = 'user-label';
+      label.textContent = isLocal ? userName + ' (Вы)' : id;
+      
+      wrap.appendChild(video);
+      wrap.appendChild(label);
+      document.getElementById('videos').appendChild(wrap);
+    }
+
+    function startAudioMonitoring() {
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (!audioTrack) {
+        log('❌ Аудио трек не найден');
+        return;
+      }
+      
+      log('🎤 Мониторинг запущен');
+      
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      
+      const source = audioContext.createMediaStreamSource(localStream);
+      source.connect(analyser);
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      function check() {
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a,b) => a+b) / dataArray.length;
+        
+        if (avg > 0) {
+          log('🎤 Уровень: ' + Math.round(avg));
+          if (avg > 10) log('✅ МИКРОФОН РАБОТАЕТ!');
+        }
+        
+        setTimeout(check, 2000);
+      }
+      check();
+    }
+
+    function createPC(targetId) {
+      if (peerConnections[targetId]) return peerConnections[targetId];
+      
+      log('🔧 PC для ' + targetId);
+      
+      const pc = new RTCPeerConnection(rtcConfig);
+      
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      
+      pc.ontrack = (e) => {
+        log('📥 Трек от ' + targetId);
+        addVideo(e.streams[0], targetId, false);
+      };
+      
+      pc.onicecandidate = (e) => {
+        if (e.candidate) socket.emit('ice', { to: targetId, ice: e.candidate });
+      };
+      
+      pc.oniceconnectionstatechange = () => {
+        log('🔌 ICE: ' + pc.iceConnectionState);
+      };
+      
+      peerConnections[targetId] = pc;
+      return pc;
+    }
+
+    socket.on('usersList', (users) => {
+      log('👥 В комнате: ' + users.length);
+      users.forEach(u => createPC(u.id));
+    });
+
+    socket.on('userJoined', async ({id, name}) => {
+      log('👤 ' + name + ' вошёл');
+      if (id === socket.id) return;
+      
+      const pc = createPC(id);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      
+      setTimeout(() => {
+        socket.emit('offer', { to: id, offer: pc.localDescription });
+      }, 500);
+    });
+
+    socket.on('offer', async ({from, offer}) => {
+      log('📥 Offer от ' + from);
+      
+      const pc = createPC(from);
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      
+      setTimeout(() => {
+        socket.emit('answer', { to: from, answer: pc.localDescription });
+      }, 500);
+    });
+
+    socket.on('answer', async ({from, answer}) => {
+      log('📥 Answer от ' + from);
+      const pc = peerConnections[from];
+      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    });
+
+    socket.on('ice', async ({from, ice}) => {
+      const pc = peerConnections[from];
+      if (pc && ice) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(ice)); } catch(e) {}
+      }
+    });
+
+    socket.on('userLeft', ({id}) => {
+      log('👤 Выход ' + id);
+      if (peerConnections[id]) {
+        peerConnections[id].close();
+        delete peerConnections[id];
+      }
+      document.getElementById('video-' + id)?.remove();
+    });
+
+    socket.on('count', (n) => {
+      document.getElementById('count').textContent = n;
+    });
+
+    function toggleMic() {
+      const track = localStream?.getAudioTracks()[0];
+      if (track) {
+        track.enabled = !track.enabled;
+        document.getElementById('btnMic').textContent = track.enabled ? '🎤 ВКЛ' : '🔇 ВЫКЛ';
+        document.getElementById('btnMic').className = track.enabled ? 'success' : 'active';
+      }
+    }
+
+    function toggleCam() {
+      const track = localStream?.getVideoTracks()[0];
+      if (track) {
+        track.enabled = !track.enabled;
+        document.getElementById('btnCam').textContent = track.enabled ? '📷 ВКЛ' : '📵 ВЫКЛ';
+        document.getElementById('btnCam').className = track.enabled ? 'success' : 'active';
+      }
+    }
+
+    function copyLink() {
+      navigator.clipboard.writeText(window.location.origin).then(() => {
+        alert('Ссылка: ' + window.location.origin);
+      });
+    }
+  </script>
 </body>
 </html>
