@@ -1,4 +1,4 @@
-﻿let socket;
+let socket;
 let localStream;
 let peer;
 let peers = new Map();
@@ -28,7 +28,6 @@ function setupSocketListeners() {
         currentRoomId = data.roomId;
         currentRoomIdSpan.textContent = currentRoomId;
         
-        // Отображаем существующих участников
         data.participants.forEach(participant => {
             if (participant.id !== socket.id) {
                 addRemoteVideo(participant.id, participant.name);
@@ -48,11 +47,11 @@ function setupSocketListeners() {
     
     socket.on('offer', async (data) => {
         if (!peers.has(data.from)) {
-            const peer = createPeerConnection(data.from, data.fromName);
-            peers.set(data.from, { peer, name: data.fromName });
-            await peer.setRemoteDescription(new RTCSessionDescription(data.offer));
-            const answer = await peer.createAnswer();
-            await peer.setLocalDescription(answer);
+            const peerConnection = createPeerConnection(data.from, data.fromName);
+            peers.set(data.from, { peer: peerConnection, name: data.fromName });
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
             socket.emit('answer', { target: data.from, answer });
         }
     });
@@ -108,20 +107,29 @@ function addLocalVideo() {
 }
 
 function createPeerConnection(targetUserId, userName) {
+    // Улучшенная конфигурация ICE серверов для работы через интернет
     const peerConnection = new RTCPeerConnection({
         iceServers: [
+            // Google STUN серверы
             { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-        ]
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            // Публичный STUN сервер
+            { urls: 'stun:stun.stunprotocol.org:3478' }
+        ],
+        iceCandidatePoolSize: 10
     });
     
-    // Добавляем локальный трек
+    // Добавляем локальные треки
     if (localStream) {
         localStream.getTracks().forEach(track => {
             peerConnection.addTrack(track, localStream);
         });
     }
     
+    // Обработка ICE кандидатов
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
             socket.emit('ice-candidate', {
@@ -131,6 +139,7 @@ function createPeerConnection(targetUserId, userName) {
         }
     };
     
+    // Обработка входящих потоков
     peerConnection.ontrack = (event) => {
         const container = document.getElementById(`video-${targetUserId}`);
         if (container) {
@@ -141,6 +150,11 @@ function createPeerConnection(targetUserId, userName) {
                 video.playsInline = true;
             }
         }
+    };
+    
+    // Обработка ошибок ICE
+    peerConnection.oniceconnectionstatechange = () => {
+        console.log(`ICE connection state for ${userName}: ${peerConnection.iceConnectionState}`);
     };
     
     return peerConnection;
@@ -261,11 +275,6 @@ function toggleAudio() {
         audioTrack.enabled = !audioTrack.enabled;
         const btn = document.getElementById('audioBtn');
         btn.textContent = audioTrack.enabled ? '🎤 Mute' : '🔇 Unmute';
-        
-        // Обновляем статус на всех видео
-        document.querySelectorAll('.audio-status').forEach(status => {
-            status.textContent = audioTrack.enabled ? '🔊' : '🔇';
-        });
     }
 }
 
@@ -275,11 +284,6 @@ function toggleVideo() {
         videoTrack.enabled = !videoTrack.enabled;
         const btn = document.getElementById('videoBtn');
         btn.textContent = videoTrack.enabled ? '📹 Stop Video' : '📹 Start Video';
-        
-        const localVideo = document.querySelector(`#video-${socket.id} video`);
-        if (localVideo) {
-            localVideo.srcObject = localStream;
-        }
     }
 }
 
@@ -287,20 +291,17 @@ async function shareScreen() {
     try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
         
-        // Заменяем видео трек
         const videoTrack = screenStream.getVideoTracks()[0];
         const oldVideoTrack = localStream.getVideoTracks()[0];
         
         localStream.removeTrack(oldVideoTrack);
         localStream.addTrack(videoTrack);
         
-        // Обновляем локальное видео
         const localVideo = document.querySelector(`#video-${socket.id} video`);
         if (localVideo) {
             localVideo.srcObject = localStream;
         }
         
-        // Обновляем все peer connections
         peers.forEach((value, key) => {
             const sender = value.peer.getSenders().find(s => s.track && s.track.kind === 'video');
             if (sender) {
@@ -309,7 +310,6 @@ async function shareScreen() {
         });
         
         videoTrack.onended = () => {
-            // Возвращаемся к обычной камере
             navigator.mediaDevices.getUserMedia({ video: true })
                 .then(stream => {
                     const newVideoTrack = stream.getVideoTracks()[0];
