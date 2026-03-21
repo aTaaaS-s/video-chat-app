@@ -1,58 +1,206 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Видеочат</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎥 Видеочат</title>
   <style>
-    body { margin: 0; font-family: Arial; background: #1a1a2e; }
-    #meet { width: 100vw; height: 100vh; }
-    .login {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      display: flex; justify-content: center; align-items: center;
-      background: linear-gradient(135deg, #1a1a2e, #16213e);
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white;
+      min-height: 100vh;
     }
-    .login input {
-      padding: 15px; font-size: 18px; margin: 10px;
-      border-radius: 10px; border: none; width: 300px;
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    h1 { text-align: center; margin: 30px 0; font-size: 32px; }
+    
+    /* Экран входа */
+    #login {
+      max-width: 400px;
+      margin: 80px auto;
+      text-align: center;
+      background: rgba(255,255,255,0.1);
+      padding: 40px;
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
     }
-    .login button {
-      padding: 15px 30px; font-size: 18px;
-      background: #667eea; color: white; border: none;
-      border-radius: 10px; cursor: pointer;
+    #login input {
+      padding: 15px;
+      width: 100%;
+      margin: 10px 0;
+      border-radius: 10px;
+      border: 2px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1);
+      color: white;
+      font-size: 18px;
+    }
+    #login input:focus { outline: none; border-color: #667eea; }
+    #login button {
+      padding: 15px 30px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    #login button:hover { transform: translateY(-2px); }
+    
+    /* Экран чата */
+    #chat { display: none; }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 20px;
+      background: rgba(102, 126, 234, 0.2);
+      border-radius: 10px;
+      margin-bottom: 20px;
+    }
+    .header h2 { font-size: 18px; }
+    .header button {
+      padding: 8px 15px;
+      background: #667eea;
+      border: none;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    
+    #jitsi-container {
+      width: 100%;
+      height: 70vh;
+      border-radius: 15px;
+      overflow: hidden;
+      background: #000;
+    }
+    
+    .info {
+      text-align: center;
+      margin-top: 15px;
+      color: #aaa;
+      font-size: 14px;
+    }
+    
+    @media (max-width: 600px) {
+      #jitsi-container { height: 60vh; }
+      .header { flex-direction: column; gap: 10px; text-align: center; }
     }
   </style>
 </head>
 <body>
-  <div class="login" id="login">
-    <div>
-      <input type="text" id="name" placeholder="Ваше имя">
-      <br>
-      <button onclick="join()">📹 Войти</button>
+  <div class="container">
+    <h1>🎥 Видеочат</h1>
+    
+    <!-- Экран входа -->
+    <div id="login">
+      <input type="text" id="userName" placeholder="Ваше имя" maxlength="20">
+      <button onclick="joinChat()">📹 Войти в видеочат</button>
+      <div class="info">
+        💡 Все пользователи попадают в одну общую комнату
+      </div>
+    </div>
+
+    <!-- Экран видеочата -->
+    <div id="chat">
+      <div class="header">
+        <h2>📍 Общая комната: <strong>main-room</strong></h2>
+        <button onclick="copyLink()">📋 Скопировать ссылку</button>
+      </div>
+      
+      <div id="jitsi-container"></div>
+      
+      <div class="info">
+        Отправьте ссылку другу чтобы он подключился
+      </div>
     </div>
   </div>
-  <div id="meet" style="display:none"></div>
-  
+
+  <!-- Jitsi External API -->
   <script src='https://meet.jit.si/external_api.js'></script>
   <script>
-    function join() {
-      const name = document.getElementById('name').value || 'User';
-      const room = 'myvideochat' + Math.floor(Math.random() * 1000);
+    let jitsiApi = null;
+    const ROOM_NAME = 'mygroupchat-main-room-v1'; // Одна комната для всех
+
+    function joinChat() {
+      const name = document.getElementById('userName').value.trim() || 'User';
       
-      const api = new JitsiMeetExternalAPI('meet.jit.si', {
-        roomName: room,
-        parentNode: document.getElementById('meet'),
-        userInfo: { displayName: name },
+      // Скрываем вход, показываем чат
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('chat').style.display = 'block';
+      
+      // Запускаем Jitsi
+      startJitsi(name);
+    }
+
+    function startJitsi(displayName) {
+      const domain = 'meet.jit.si';
+      const options = {
+        roomName: ROOM_NAME,
+        width: '100%',
+        height: '100%',
+        parentNode: document.querySelector('#jitsi-container'),
+        userInfo: { displayName: displayName },
         configOverwrite: {
           startWithAudioMuted: false,
-          startWithVideoMuted: false
+          startWithVideoMuted: false,
+          prejoinPageEnabled: false,
+          disableDeepLinking: true,
+          enableWelcomePage: false,
+          requireDisplayName: true,
+          defaultLanguage: 'ru'
         },
         interfaceConfigOverwrite: {
-          TOOLBAR_BUTTONS: ['microphone', 'camera', 'hangup']
+          TOOLBAR_BUTTONS: [
+            'microphone', 
+            'camera', 
+            'desktop', 
+            'hangup', 
+            'chat', 
+            'settings', 
+            'tileview'
+          ],
+          SHOW_JITSI_WATERMARK: false,
+          SHOW_WATERMARK_FOR_GUESTS: false,
+          MOBILE_APP_PROMO: false
         }
+      };
+
+      jitsiApi = new JitsiMeetExternalAPI(domain, options);
+
+      // События
+      jitsiApi.addEventListener('videoConferenceJoined', () => {
+        console.log('✅ Подключён к конференции');
       });
-      
-      document.getElementById('login').style.display = 'none';
-      document.getElementById('meet').style.display = 'block';
+
+      jitsiApi.addEventListener('participantJoined', (e) => {
+        console.log('👤 Присоединился:', e.displayName);
+      });
+
+      jitsiApi.addEventListener('participantLeft', (e) => {
+        console.log('👤 Покинул:', e.displayName);
+      });
+    }
+
+    function copyLink() {
+      const url = window.location.origin;
+      navigator.clipboard.writeText(url).then(() => {
+        alert('✅ Ссылка скопирована!\n\n' + url + '\n\nОтправьте другу!');
+      }).catch(() => {
+        prompt('Скопируйте ссылку:', url);
+      });
+    }
+
+    // Авто-вход если есть ?name= в URL
+    const params = new URLSearchParams(window.location.search);
+    const nameParam = params.get('name');
+    if (nameParam) {
+      document.getElementById('userName').value = nameParam;
     }
   </script>
 </body>
