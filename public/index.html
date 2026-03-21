@@ -1,46 +1,18 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🎥 Видеочат WebRTC</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <!-- Экран входа -->
-  <div class="screen" id="loginScreen">
-    <div class="card">
-      <h1>🎥 Видеочат</h1>
-      <p>Создай комнату или присоединись к существующей</p>
-      <input type="text" id="userName" placeholder="Ваше имя" maxlength="20"/>
-      <input type="text" id="roomId" placeholder="Название комнаты" maxlength="20"/>
-      <button onclick="joinRoom()">Войти</button>
-    </div>
-  </div>
+<!-- Добавь после controls -->
+<div class="status-bar" style="background: rgba(0,0,0,0.6); padding: 10px; text-align: center; font-size: 12px;">
+  <span id="micStatus">🎤 Проверка...</span> | 
+  <span id="camStatus">📹 Проверка...</span> |
+  <button onclick="testAudio()" style="margin-left: 10px; padding: 3px 8px; cursor: pointer;">🔊 Тест звука</button>
+</div>
 
-  <!-- Экран видеочата -->
-  <div class="screen" id="chatScreen" style="display: none;">
-    <div class="header">
-      <div class="room-info">
-        <span>📍 Комната:</span>
-        <strong id="displayRoomId"></strong>
-        <button onclick="copyLink()" class="btn-small">📋</button>
-      </div>
-      <button onclick="leaveRoom()" class="btn-leave">🚪 Выйти</button>
-    </div>
-    
-    <div class="videos-container" id="videosContainer">
-      <!-- Видео будут добавляться сюда -->
-    </div>
-
-    <div class="controls">
-      <button id="btnMic" onclick="toggleMic()">🎤</button>
-      <button id="btnCam" onclick="toggleCam()">📷</button>
-      <button onclick="leaveRoom()" class="btn-hangup">📞</button>
-    </div>
-  </div>
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="client.js"></script>
-</body>
-</html>
+<script>
+function testAudio() {
+  const audioTrack = localStream?.getAudioTracks()[0];
+  if (audioTrack) {
+    const settings = audioTrack.getSettings();
+    alert(`Микрофон:\n• Название: ${audioTrack.label}\n• Включен: ${audioTrack.enabled}\n• Устройство: ${settings.deviceId || 'default'}`);
+  } else {
+    alert('Микрофон не найден!');
+  }
+}
+</script>
