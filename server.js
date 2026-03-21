@@ -6,96 +6,89 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-    credentials: true
-  },
-  pingTimeout: 60000,
-  pingInterval: 25000
+  cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
 const PORT = process.env.PORT || 3000;
-
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-const rooms = {};
+const users = {}; // Все пользователи
 
 io.on('connection', (socket) => {
   console.log(`✅ Подключился: ${socket.id}`);
 
-  socket.on('join-room', ({ roomId, userName }) => {
-    const roomName = 'MAIN-ROOM';
+  // Вход в комнату
+  socket.on('join-room', (data) => {
+    const roomId = 'MAIN-ROOM';
+    socket.join(roomId);
+    socket.roomId = roomId;
+    socket.userName = data.userName || 'User';
     
-    socket.join(roomName);
-    socket.roomId = roomName;
-    socket.userName = userName;
+    // Сохраняем пользователя
+    users[socket.id] = {
+      id: socket.id,
+      name: socket.userName,
+      roomId: roomId
+    };
     
-    if (!rooms[roomName]) {
-      rooms[roomName] = [];
-    }
+    console.log(`📍 ${socket.userName} (${socket.id}) вошёл в ${roomId}`);
+    console.log(`Всего пользователей: ${Object.keys(users).length}`);
     
-    rooms[roomName].push({ id: socket.id, name: userName });
-    
-    console.log(` ${userName} (${socket.id}) в ${roomName}. Всего: ${rooms[roomName].length}`);
-    
-    // Отправляем НОВОМУ пользователю список существующих
-    const otherUsers = rooms[roomName].filter(u => u.id !== socket.id);
+    // Отправляем новому пользователю список ВСЕХ остальных
+    const otherUsers = Object.values(users).filter(u => u.id !== socket.id);
+    console.log(`Отправляю ${socket.id} список: ${otherUsers.length} пользователей`);
     socket.emit('room-users', otherUsers);
-    console.log(`  Отправлено room-users: ${otherUsers.length} пользователей`);
     
-    // Сообщаем ДРУГИМ о новом пользователе
-    socket.to(roomName).emit('user-joined', { 
-      id: socket.id, 
-      name: userName 
+    // Сообщаем ВСЕМ (включая нового) о новом участнике
+    io.to(roomId).emit('user-joined', {
+      id: socket.id,
+      name: socket.userName
     });
-    console.log(`  Отправлено user-joined другим пользователям`);
+    console.log(`Отправлено user-joined всем в комнате`);
+    
+    // Обновляем счётчик
+    io.to(roomId).emit('update-count', Object.keys(users).length);
   });
 
   // WebRTC сигнализация
-  socket.on('offer', ({ targetId, offer }) => {
-    console.log(`📤 Offer: ${socket.id} -> ${targetId}`);
-    socket.to(targetId).emit('offer', { 
-      senderId: socket.id, 
-      offer 
+  socket.on('offer', (data) => {
+    console.log(`📤 Offer: ${socket.id} -> ${data.targetId}`);
+    socket.to(data.targetId).emit('offer', {
+      senderId: socket.id,
+      offer: data.offer
     });
   });
 
-  socket.on('answer', ({ targetId, answer }) => {
-    console.log(`📤 Answer: ${socket.id} -> ${targetId}`);
-    socket.to(targetId).emit('answer', { 
-      senderId: socket.id, 
-      answer 
+  socket.on('answer', (data) => {
+    console.log(`📤 Answer: ${socket.id} -> ${data.targetId}`);
+    socket.to(data.targetId).emit('answer', {
+      senderId: socket.id,
+      answer: data.answer
     });
   });
 
-  socket.on('ice-candidate', ({ targetId, candidate }) => {
-    socket.to(targetId).emit('ice-candidate', { 
-      senderId: socket.id, 
-      candidate 
+  socket.on('ice-candidate', (data) => {
+    socket.to(data.targetId).emit('ice-candidate', {
+      senderId: socket.id,
+      candidate: data.candidate
     });
   });
 
+  // Выход
   socket.on('disconnect', () => {
     console.log(`❌ Отключился: ${socket.id}`);
-    
-    if (socket.roomId && rooms[socket.roomId]) {
-      rooms[socket.roomId] = rooms[socket.roomId].filter(u => u.id !== socket.id);
+    if (users[socket.id]) {
+      const roomId = users[socket.id].roomId;
+      const name = users[socket.id].name;
+      delete users[socket.id];
       
-      socket.to(socket.roomId).emit('user-left', { id: socket.id });
-      
-      if (rooms[socket.roomId].length === 0) {
-        delete rooms[socket.roomId];
-      }
+      io.to(roomId).emit('user-left', { id: socket.id });
+      io.to(roomId).emit('update-count', Object.keys(users).length);
+      console.log(`${name} вышел. Осталось: ${Object.keys(users).length}`);
     }
   });
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Сервер запущен на порту ${PORT}`);
-  console.log(`📍 Общая комната: MAIN-ROOM`);
+  console.log(`🚀 Сервер на порту ${PORT}`);
 });
