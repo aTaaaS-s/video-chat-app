@@ -1,188 +1,46 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-  <title>🎥 Видеочат</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      color: #333;
-    }
-    .screen {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-    .card {
-      background: white;
-      padding: 40px 30px;
-      border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      text-align: center;
-      width: 100%;
-      max-width: 400px;
-    }
-    .card h1 { margin-bottom: 10px; font-size: 28px; }
-    .card p { color: #666; margin-bottom: 25px; font-size: 14px; }
-    .card input {
-      width: 100%;
-      padding: 14px;
-      border: 2px solid #e0e0e0;
-      border-radius: 10px;
-      font-size: 16px;
-      margin-bottom: 20px;
-    }
-    .card input:focus { outline: none; border-color: #667eea; }
-    .card button {
-      width: 100%;
-      padding: 14px;
-      background: linear-gradient(135deg, #667eea, #764ba2);
-      color: white;
-      border: none;
-      border-radius: 10px;
-      font-size: 18px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .card button:hover { transform: translateY(-2px); }
-    
-    /* Экран чата */
-    #chatScreen {
-      display: none;
-      flex-direction: column;
-      height: 100vh;
-      background: #1a1a2e;
-    }
-    .header {
-      background: rgba(0,0,0,0.8);
-      padding: 12px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      backdrop-filter: blur(10px);
-    }
-    .header h2 { color: white; font-size: 16px; font-weight: normal; }
-    .header button {
-      padding: 8px 16px;
-      background: #667eea;
-      color: white;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 14px;
-      margin-left: 10px;
-    }
-    .leave { background: #e53e3e !important; }
-    #jitsi-container { flex: 1; background: #000; }
-    
-    @media (max-width: 600px) {
-      .card { padding: 30px 20px; }
-      .header { flex-direction: column; gap: 10px; text-align: center; }
-      .header button { margin: 5px 0; }
-    }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎥 Видеочат WebRTC</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <!-- Экран входа -->
   <div class="screen" id="loginScreen">
     <div class="card">
       <h1>🎥 Видеочат</h1>
-      <p>Одна общая комната. Введите имя и нажмите «Войти»</p>
-      <input type="text" id="userName" placeholder="Ваше имя" autocomplete="off" maxlength="20"/>
-      <button onclick="joinChat()">Войти</button>
+      <p>Создай комнату или присоединись к существующей</p>
+      <input type="text" id="userName" placeholder="Ваше имя" maxlength="20"/>
+      <input type="text" id="roomId" placeholder="Название комнаты" maxlength="20"/>
+      <button onclick="joinRoom()">Войти</button>
     </div>
   </div>
 
-  <!-- Экран чата -->
-  <div id="chatScreen">
+  <!-- Экран видеочата -->
+  <div class="screen" id="chatScreen" style="display: none;">
     <div class="header">
-      <h2>Комната: <strong>main-room</strong></h2>
-      <div>
-        <button onclick="copyLink()">📋 Ссылка</button>
-        <button onclick="leaveChat()" class="leave">🚪 Выйти</button>
+      <div class="room-info">
+        <span>📍 Комната:</span>
+        <strong id="displayRoomId"></strong>
+        <button onclick="copyLink()" class="btn-small">📋</button>
       </div>
+      <button onclick="leaveRoom()" class="btn-leave">🚪 Выйти</button>
     </div>
-    <div id="jitsi-container"></div>
+    
+    <div class="videos-container" id="videosContainer">
+      <!-- Видео будут добавляться сюда -->
+    </div>
+
+    <div class="controls">
+      <button id="btnMic" onclick="toggleMic()">🎤</button>
+      <button id="btnCam" onclick="toggleCam()">📷</button>
+      <button onclick="leaveRoom()" class="btn-hangup">📞</button>
+    </div>
   </div>
 
-  <!-- Jitsi Meet External API -->
-  <script src="https://meet.jit.si/external_api.js"></script>
-  <script>
-    let jitsiApi = null;
-    const ROOM_NAME = 'mygroupchat-main-room-v1'; // ← одна фиксированная комната для всех
-
-    function joinChat() {
-      const name = document.getElementById('userName').value.trim();
-      if (!name) { alert('Введите имя!'); return; }
-
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('chatScreen').style.display = 'flex';
-
-      startJitsi(name);
-    }
-
-    function startJitsi(displayName) {
-      const domain = 'meet.jit.si';
-      const options = {
-        roomName: ROOM_NAME,
-        width: '100%',
-        height: '100%',
-        parentNode: document.querySelector('#jitsi-container'),
-        userInfo: { displayName },
-        configOverwrite: {
-          startWithAudioMuted: false,
-          startWithVideoMuted: false,
-          prejoinPageEnabled: false,
-          disableDeepLinking: true,
-          enableWelcomePage: false,
-          requireDisplayName: true,
-          defaultLanguage: 'ru'
-        },
-        interfaceConfigOverwrite: {
-          TOOLBAR_BUTTONS: ['microphone', 'camera', 'desktop', 'hangup', 'chat', 'settings', 'tileview'],
-          SHOW_JITSI_WATERMARK: false,
-          SHOW_WATERMARK_FOR_GUESTS: false
-        }
-      };
-
-      jitsiApi = new JitsiMeetExternalAPI(domain, options);
-
-      jitsiApi.addEventListener('videoConferenceJoined', () => {
-        console.log('✅ Подключён к конференции');
-      });
-    }
-
-    function leaveChat() {
-      if (jitsiApi) {
-        jitsiApi.dispose();
-        jitsiApi = null;
-      }
-      document.getElementById('chatScreen').style.display = 'none';
-      document.getElementById('loginScreen').style.display = 'flex';
-      document.getElementById('userName').value = '';
-    }
-
-    function copyLink() {
-      const url = window.location.href;
-      navigator.clipboard.writeText(url).then(() => {
-        alert('✅ Ссылка скопирована! Отправьте её другу.');
-      }).catch(() => {
-        prompt('Скопируйте ссылку:', url);
-      });
-    }
-
-    // Если в URL есть ?name=XXX — автозаполняем поле
-    const params = new URLSearchParams(window.location.search);
-    const nameParam = params.get('name');
-    if (nameParam) {
-      document.getElementById('userName').value = nameParam;
-    }
-  </script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
 </body>
 </html>
