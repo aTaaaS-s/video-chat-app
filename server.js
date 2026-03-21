@@ -5,9 +5,7 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
@@ -15,59 +13,43 @@ app.use(express.static(path.join(__dirname, 'public')));
 const users = {};
 
 io.on('connection', (socket) => {
-  console.log(`✅ Подключился: ${socket.id}`);
+  console.log('Connect:', socket.id);
 
-  socket.on('join-room', (data) => {
-    const userName = data.userName || 'User';
-    const roomId = 'MAIN-ROOM';
+  socket.on('join', ({ name }) => {
+    socket.userName = name;
+    users[socket.id] = { id: socket.id, name };
     
-    socket.join(roomId);
-    socket.roomId = roomId;
-    socket.userName = userName;
+    socket.join('room1');
     
-    users[socket.id] = { id: socket.id, name: userName, roomId };
+    // Отправляем всем в комнате о новом участнике
+    socket.to('room1').emit('userJoined', { id: socket.id, name });
     
-    console.log(`📍 ${userName} (${socket.id}) вошёл`);
-    console.log(`Всего: ${Object.keys(users).length}`);
+    // Отправляем новому список существующих
+    const others = Object.values(users).filter(u => u.id !== socket.id);
+    socket.emit('usersList', others);
     
-    // Отправляем новому пользователю список остальных
-    const otherUsers = Object.values(users).filter(u => u.id !== socket.id);
-    console.log(`Отправляю ${socket.id} список: ${otherUsers.length} чел.`);
-    socket.emit('room-users', otherUsers);
-    
-    // Сообщаем ВСЕМ в комнате о новом участнике
-    io.to(roomId).emit('user-joined', { id: socket.id, name: userName });
-    
-    // Обновляем счётчик
-    io.to(roomId).emit('update-count', Object.keys(users).length);
+    io.to('room1').emit('count', Object.keys(users).length);
+    console.log(`${name} joined. Total: ${Object.keys(users).length}`);
   });
 
   socket.on('offer', (data) => {
-    socket.to(data.targetId).emit('offer', { senderId: socket.id, offer: data.offer });
+    socket.to(data.to).emit('offer', { from: socket.id, offer: data.offer });
   });
 
   socket.on('answer', (data) => {
-    socket.to(data.targetId).emit('answer', { senderId: socket.id, answer: data.answer });
+    socket.to(data.to).emit('answer', { from: socket.id, answer: data.answer });
   });
 
-  socket.on('ice-candidate', (data) => {
-    socket.to(data.targetId).emit('ice-candidate', { senderId: socket.id, candidate: data.candidate });
+  socket.on('ice', (data) => {
+    socket.to(data.to).emit('ice', { from: socket.id, ice: data.ice });
   });
 
   socket.on('disconnect', () => {
-    console.log(`❌ Отключился: ${socket.id}`);
-    if (users[socket.id]) {
-      const roomId = users[socket.id].roomId;
-      const name = users[socket.id].name;
-      delete users[socket.id];
-      
-      io.to(roomId).emit('user-left', { id: socket.id });
-      io.to(roomId).emit('update-count', Object.keys(users).length);
-      console.log(`${name} вышел. Осталось: ${Object.keys(users).length}`);
-    }
+    delete users[socket.id];
+    io.to('room1').emit('userLeft', { id: socket.id });
+    io.to('room1').emit('count', Object.keys(users).length);
+    console.log('Disconnect. Total:', Object.keys(users).length);
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`🚀 Сервер на порту ${PORT}`);
-});
+server.listen(PORT, () => console.log('Server on', PORT));
