@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🎥 Видеочат</title>
+  <title>Видеочат</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,14 +11,12 @@
     <h1>🎥 Видеочат</h1>
     
     <div id="loginForm" class="form-group">
-      <input type="text" id="userName" placeholder="Ваше имя" maxlength="20">
-      
-      <div style="background: rgba(102, 126, 234, 0.2); padding: 20px; border-radius: 10px; margin: 20px 0; text-align: center;">
-        <div style="font-size: 24px; font-weight: bold; color: #667eea; margin: 10px 0;">MAIN-ROOM</div>
-        <div style="font-size: 13px; color: #888;">Общая комната для всех</div>
+      <input type="text" id="userName" placeholder="Ваше имя">
+      <div style="text-align:center; margin:15px 0; padding:15px; background:rgba(102,126,234,0.2); border-radius:10px;">
+        <div style="font-size:20px; font-weight:bold; color:#667eea;">MAIN-ROOM</div>
+        <div style="font-size:12px; color:#aaa;">Общая комната</div>
       </div>
-      
-      <button onclick="startVideo()" class="btn-primary">📹 Войти в видеочат</button>
+      <button onclick="startVideo()" class="btn-primary">📹 Войти</button>
     </div>
 
     <div id="videoContainer" class="hidden">
@@ -27,15 +25,14 @@
         <p>Участников: <span id="userCount">1</span></p>
       </div>
       
-      <div id="status">Подключение...</div>
-      
-      <button onclick="copyLink()" class="btn-copy">📋 Скопировать ссылку для друга</button>
+      <div id="status">Подключено</div>
+      <button onclick="copyLink()" class="btn-copy">📋 Скопировать ссылку</button>
       
       <div id="videosContainer"></div>
       
       <div class="controls">
-        <button id="btnMic" onclick="toggleMic()" class="btn-control success">🎤 Микрофон ВКЛ</button>
-        <button id="btnCam" onclick="toggleCam()" class="btn-control success">📷 Камера ВКЛ</button>
+        <button id="btnMic" onclick="toggleMic()" class="btn-control">🎤 ВКЛ</button>
+        <button id="btnCam" onclick="toggleCam()" class="btn-control">📷 ВКЛ</button>
         <button onclick="stopVideo()" class="btn-control">❌ Выйти</button>
       </div>
       
