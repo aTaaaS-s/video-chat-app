@@ -21,15 +21,13 @@ io.on('connection', (socket) => {
     
     socket.join('room1');
     
-    // Отправляем всем в комнате о новом участнике
     socket.to('room1').emit('userJoined', { id: socket.id, name });
     
-    // Отправляем новому список существующих
     const others = Object.values(users).filter(u => u.id !== socket.id);
     socket.emit('usersList', others);
     
     io.to('room1').emit('count', Object.keys(users).length);
-    console.log(`${name} joined. Total: ${Object.keys(users).length}`);
+    console.log(name, 'joined. Total:', Object.keys(users).length);
   });
 
   socket.on('offer', (data) => {
@@ -52,4 +50,4 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => console.log('Server on', PORT));
+server.listen(PORT, () => console.log('Server on port', PORT));
