@@ -1,16 +1,15 @@
 const socket = io();
 let localStream = null;
 let peerConnections = {};
-let iceBuffer = {}; // Буфер для ICE
 let userName = null;
 let usersMap = {};
 
-// Только STUN - TURN не работают
+// Только STUN сервера Google
 const rtcConfig = {
   iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
-  ]
+    { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
+  ],
+  iceCandidatePoolSize: 10
 };
 
 function log(msg) {
@@ -18,6 +17,7 @@ function log(msg) {
   div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
   document.getElementById('log').appendChild(div);
   document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+  console.log(msg);
 }
 
 async function joinChat() {
@@ -25,7 +25,7 @@ async function joinChat() {
   
   try {
     localStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
+      video: { width: 640, height: 480 },
       audio: true
     });
     
@@ -36,15 +36,20 @@ async function joinChat() {
     document.getElementById('chat').style.display = 'block';
     
     socket.emit('join', userName);
+    log('📤 Join отправлен');
+    
     setTimeout(testMic, 2000);
     
   } catch (err) {
-    alert(err.message);
+    alert('Ошибка: ' + err.message);
   }
 }
 
 function addVideo(stream, id, isLocal) {
-  if (document.getElementById('video-' + id)) return;
+  if (document.getElementById('video-' + id)) {
+    log('⚠️ Видео уже есть');
+    return;
+  }
   
   const name = isLocal ? userName : (usersMap[id] || id.substring(0, 6));
   log('🎬 Видео: ' + name);
@@ -58,6 +63,11 @@ function addVideo(stream, id, isLocal) {
   video.autoplay = true;
   video.playsInline = true;
   video.muted = isLocal;
+  
+  // Проверяем загрузку
+  video.onloadedmetadata = () => {
+    log(`✅ Видео ${name}: ${video.videoWidth}x${video.videoHeight}`);
+  };
   
   const label = document.createElement('div');
   label.className = 'user-label';
@@ -87,77 +97,32 @@ function testMic() {
 function createPC(targetId) {
   if (peerConnections[targetId]) return peerConnections[targetId];
   
-  log('🔧 PC для ' + targetId);
-  iceBuffer[targetId] = []; // Инициализируем буфер
+  const name = usersMap[targetId] || targetId.substring(0, 6);
+  log('🔧 PC для ' + name);
   
   const pc = new RTCPeerConnection(rtcConfig);
   
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  localStream.getTracks().forEach(track => {
+    pc.addTrack(track, localStream);
+  });
   
   pc.ontrack = (e) => {
-    log('📥 Трек от ' + targetId);
+    log('📥 Получен трек от ' + name);
     addVideo(e.streams[0], targetId, false);
   };
   
   pc.onicecandidate = (e) => {
     if (e.candidate) {
-      log('❄️ ICE кандидат');
       socket.emit('ice', { to: targetId, ice: e.candidate });
     }
   };
   
   pc.oniceconnectionstatechange = () => {
-    log('🔌 ICE: ' + pc.iceConnectionState);
+    log('🔌 ICE: ' + pc.iceConnectionState + ' (' + name + ')');
   };
   
   peerConnections[targetId] = pc;
   return pc;
-}
-
-// ===== ПРАВИЛЬНАЯ ОБРАБОТКА ICE =====
-
-async function handleIce(from, candidate) {
-  if (!candidate) return;
-  
-  const pc = peerConnections[from];
-  
-  // Если PC нет или remote description не установлен - в буфер
-  if (!pc || !pc.remoteDescription) {
-    if (!iceBuffer[from]) iceBuffer[from] = [];
-    iceBuffer[from].push(candidate);
-    log('⏳ ICE в буфере (всего: ' + iceBuffer[from].length + ')');
-    return;
-  }
-  
-  // Можно добавлять
-  try {
-    await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    log('✅ ICE добавлен');
-  } catch(e) {
-    log('⚠️ ICE ошибка: ' + e.message);
-  }
-}
-
-async function processIceBuffer(peerId) {
-  const candidates = iceBuffer[peerId] || [];
-  if (candidates.length === 0) return;
-  
-  log('📋 Обработка ' + candidates.length + ' ICE из буфера');
-  
-  const pc = peerConnections[peerId];
-  if (!pc || !pc.remoteDescription) {
-    log('⚠️ PC или remote description ещё не готовы');
-    return;
-  }
-  
-  for (const c of candidates) {
-    try {
-      await pc.addIceCandidate(new RTCIceCandidate(c));
-    } catch(e) {}
-  }
-  
-  iceBuffer[peerId] = [];
-  log('✅ Буфер очищен');
 }
 
 // ===== СОБЫТИЯ =====
@@ -177,15 +142,22 @@ socket.on('userJoined', async ({id, name}) => {
   usersMap[id] = name;
   const pc = createPC(id);
   
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  log('📤 Offer создан');
-  
-  // Ждём 1 секунду для сбора ICE
-  setTimeout(() => {
-    socket.emit('offer', { to: id, offer: pc.localDescription });
-    log('📤 Offer отправлен');
-  }, 1000);
+  try {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    
+    // Ждём ICE кандидаты
+    setTimeout(() => {
+      socket.emit('offer', { 
+        to: id, 
+        offer: pc.localDescription 
+      });
+      log('📤 Offer отправлен');
+    }, 1000);
+    
+  } catch(e) {
+    log('❌ Offer error: ' + e.message);
+  }
 });
 
 socket.on('offer', async ({from, offer}) => {
@@ -193,21 +165,22 @@ socket.on('offer', async ({from, offer}) => {
   
   const pc = createPC(from);
   
-  // СНАЧАЛА remote description
-  await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  log('✅ Remote description установлен');
-  
-  // ТЕПЕРЬ обрабатываем буфер
-  await processIceBuffer(from);
-  
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  log('📤 Answer создан');
-  
-  setTimeout(() => {
-    socket.emit('answer', { to: from, answer: pc.localDescription });
-    log('📤 Answer отправлен');
-  }, 1000);
+  try {
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    
+    setTimeout(() => {
+      socket.emit('answer', { 
+        to: from, 
+        answer: pc.localDescription 
+      });
+      log('📤 Answer отправлен');
+    }, 1000);
+    
+  } catch(e) {
+    log('❌ Answer error: ' + e.message);
+  }
 });
 
 socket.on('answer', async ({from, answer}) => {
@@ -215,17 +188,17 @@ socket.on('answer', async ({from, answer}) => {
   
   const pc = peerConnections[from];
   if (pc) {
-    // СНАЧАЛА remote description
     await pc.setRemoteDescription(new RTCSessionDescription(answer));
-    log('✅ Remote description установлен');
-    
-    // ТЕПЕРЬ буфер
-    await processIceBuffer(from);
   }
 });
 
-socket.on('ice', ({from, ice}) => {
-  handleIce(from, ice);
+socket.on('ice', async ({from, ice}) => {
+  const pc = peerConnections[from];
+  if (pc && ice) {
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(ice));
+    } catch(e) {}
+  }
 });
 
 socket.on('userLeft', ({id}) => {
@@ -234,7 +207,6 @@ socket.on('userLeft', ({id}) => {
     peerConnections[id].close();
     delete peerConnections[id];
   }
-  delete iceBuffer[id];
   delete usersMap[id];
   document.getElementById('video-' + id)?.remove();
 });
