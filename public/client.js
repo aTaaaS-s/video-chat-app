@@ -1,19 +1,4 @@
-const socket = io();
-
-let localStream = null;
-let peerConnections = {};
-let roomId = null;
-let userName = null;
-
-// WebRTC конфигурация (публичные STUN сервера)
-const rtcConfig = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
-  ]
-};
-
-// Вход в комнату
+// Замени функцию joinRoom на эту:
 async function joinRoom() {
   userName = document.getElementById('userName').value.trim();
   roomId = document.getElementById('roomId').value.trim();
@@ -24,11 +9,41 @@ async function joinRoom() {
   }
 
   try {
-    // Получаем доступ к камере и микрофону
+    // Проверяем поддержку медиа
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('Ваш браузер не поддерживает видеочаты');
+    }
+
+    // Запрашиваем доступ с явными настройками
     localStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true
+      video: { 
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: 'user'
+      },
+      audio: { 
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
     });
+
+    // Проверяем треки
+    const audioTrack = localStream.getAudioTracks()[0];
+    const videoTrack = localStream.getVideoTracks()[0];
+    
+    console.log('🎤 Аудио трек:', audioTrack ? {
+      label: audioTrack.label,
+      enabled: audioTrack.enabled,
+      muted: audioTrack.muted,
+      settings: audioTrack.getSettings()
+    } : 'НЕТ АУДИО ТРЕКА');
+    
+    console.log('📹 Видео трек:', videoTrack ? {
+      label: videoTrack.label,
+      enabled: videoTrack.enabled,
+      settings: videoTrack.getSettings()
+    } : 'НЕТ ВИДЕО ТРЕКА');
 
     // Показываем своё видео
     addVideo(localStream, userName, true);
@@ -38,192 +53,86 @@ async function joinRoom() {
     document.getElementById('chatScreen').style.display = 'flex';
     document.getElementById('displayRoomId').textContent = roomId;
 
+    // Сохраняем roomId в URL
+    history.pushState({}, '', `?room=${roomId}`);
+
     // Подключаемся к комнате
     socket.emit('join-room', { roomId, userName });
 
-    // Сохраняем roomId в URL для удобства
-    history.pushState({}, '', `?room=${roomId}`);
+    // Проверяем микрофон через 1 секунду
+    setTimeout(() => {
+      checkMicrophone();
+    }, 1000);
 
   } catch (err) {
     console.error('Ошибка доступа к медиа:', err);
-    alert('Не удалось получить доступ к камере/микрофону. Проверьте разрешения.');
-  }
-}
-
-// Создание PeerConnection
-function createPeerConnection(targetId) {
-  const pc = new RTCPeerConnection(rtcConfig);
-
-  // Добавляем треки локального потока
-  localStream.getTracks().forEach(track => {
-    pc.addTrack(track, localStream);
-  });
-
-  // Когда получаем удалённый трек
-  pc.ontrack = (event) => {
-    const remoteStream = event.streams[0];
-    addVideo(remoteStream, targetId, false);
-  };
-
-  // ICE кандидаты
-  pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit('ice-candidate', {
-        targetId,
-        candidate: event.candidate
-      });
+    let errorMsg = 'Не удалось получить доступ к камере/микрофону.\n\n';
+    
+    if (err.name === 'NotAllowedError') {
+      errorMsg += '❌ Вы запретили доступ. Разрешите в настройках браузера.';
+    } else if (err.name === 'NotFoundError') {
+      errorMsg += '❌ Камера/микрофон не найдены.';
+    } else if (err.name === 'NotReadableError') {
+      errorMsg += '❌ Устройство уже используется другой программой.';
+    } else {
+      errorMsg += err.message;
     }
-  };
-
-  pc.onconnectionstatechange = () => {
-    console.log(`Состояние соединения с ${targetId}:`, pc.connectionState);
-  };
-
-  peerConnections[targetId] = pc;
-  return pc;
+    
+    alert(errorMsg);
+  }
 }
 
-// Обработка входящего соединения
-socket.on('user-joined', async ({ id, name }) => {
-  console.log('Пользователь присоединился:', name);
-  const pc = createPeerConnection(id);
-
-  // Создаем offer
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-
-  socket.emit('offer', { targetId: id, offer });
-});
-
-// Получение offer
-socket.on('offer', async ({ senderId, offer }) => {
-  const pc = createPeerConnection(senderId);
-
-  await pc.setRemoteDescription(new RTCSessionDescription(offer));
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-
-  socket.emit('answer', { targetId: senderId, answer });
-});
-
-// Получение answer
-socket.on('answer', async ({ senderId, answer }) => {
-  const pc = peerConnections[senderId];
-  if (pc) {
-    await pc.setRemoteDescription(new RTCSessionDescription(answer));
-  }
-});
-
-// Получение ICE кандидата
-socket.on('ice-candidate', async ({ senderId, candidate }) => {
-  const pc = peerConnections[senderId];
-  if (pc && candidate) {
-    await pc.addIceCandidate(new RTCIceCandidate(candidate));
-  }
-});
-
-// Пользователь вышел
-socket.on('user-left', ({ id }) => {
-  console.log('Пользователь вышел:', id);
-  if (peerConnections[id]) {
-    peerConnections[id].close();
-    delete peerConnections[id];
-  }
-  const videoEl = document.getElementById(`video-${id}`);
-  if (videoEl) videoEl.remove();
-});
-
-// Получаем список пользователей в комнате
-socket.on('room-users', (users) => {
-  console.log('Пользователи в комнате:', users);
-  users.forEach(({ id, name }) => {
-    createPeerConnection(id);
-  });
-});
-
-// Добавление видео на страницу
-function addVideo(stream, id, isLocal) {
-  const container = document.getElementById('videosContainer');
+// Добавь функцию проверки микрофона
+function checkMicrophone() {
+  const audioTrack = localStream?.getAudioTracks()[0];
   
-  const wrapper = document.createElement('div');
-  wrapper.className = `video-wrapper ${isLocal ? 'mirror' : ''}`;
-  wrapper.id = `video-${id}`;
-
-  const video = document.createElement('video');
-  video.srcObject = stream;
-  video.autoplay = true;
-  video.playsInline = true;
-  video.muted = isLocal; // Локальное видео без звука (чтобы не было эха)
-
-  const nameTag = document.createElement('div');
-  nameTag.className = 'user-name';
-  nameTag.textContent = isLocal ? `${userName} (Вы)` : id;
-
-  wrapper.appendChild(video);
-  wrapper.appendChild(nameTag);
-  container.appendChild(wrapper);
-}
-
-// Выход из комнаты
-function leaveRoom() {
-  // Закрываем все соединения
-  Object.values(peerConnections).forEach(pc => pc.close());
-  peerConnections = {};
-
-  // Останавливаем медиа
-  if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
-    localStream = null;
+  if (!audioTrack) {
+    console.warn('⚠️ Аудио трек отсутствует!');
+    document.getElementById('btnMic').classList.add('active');
+    return;
   }
 
-  // Очищаем видео
-  document.getElementById('videosContainer').innerHTML = '';
-
-  // Возвращаемся на экран входа
-  document.getElementById('chatScreen').style.display = 'none';
-  document.getElementById('loginScreen').style.display = 'flex';
-  document.getElementById('userName').value = '';
-  document.getElementById('roomId').value = '';
-
-  roomId = null;
-  userName = null;
+  // Создаем анализатор для проверки звука
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const analyser = audioContext.createAnalyser();
+  const source = audioContext.createMediaStreamSource(localStream);
+  
+  source.connect(analyser);
+  analyser.fftSize = 256;
+  
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+  
+  function checkLevel() {
+    analyser.getByteFrequencyData(dataArray);
+    const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+    
+    if (average > 10) {
+      console.log('🎤 Микрофон работает! Уровень:', Math.round(average));
+      document.getElementById('btnMic').classList.remove('active');
+    } else {
+      console.log('🔇 Тишина в микрофоне (уровень:', Math.round(average) + ')');
+    }
+    
+    if (audioTrack.enabled) {
+      requestAnimationFrame(checkLevel);
+    }
+  }
+  
+  checkLevel();
 }
 
-// Копирование ссылки
-function copyLink() {
-  const url = `${window.location.origin}?room=${roomId}`;
-  navigator.clipboard.writeText(url).then(() => {
-    alert('✅ Ссылка скопирована!');
-  }).catch(() => {
-    prompt('Скопируйте ссылку:', url);
-  });
-}
-
-// Вкл/Выкл микрофон
+// Замени функцию toggleMic на улучшенную:
 function toggleMic() {
   const btn = document.getElementById('btnMic');
   const audioTrack = localStream?.getAudioTracks()[0];
-  if (audioTrack) {
-    audioTrack.enabled = !audioTrack.enabled;
-    btn.classList.toggle('active', !audioTrack.enabled);
+  
+  if (!audioTrack) {
+    alert('⚠️ Микрофон не найден! Проверьте разрешения.');
+    return;
   }
+  
+  audioTrack.enabled = !audioTrack.enabled;
+  btn.classList.toggle('active', !audioTrack.enabled);
+  
+  console.log('🎤 Микрофон:', audioTrack.enabled ? 'ВКЛ' : 'ВЫКЛ');
 }
-
-// Вкл/Выкл камеру
-function toggleCam() {
-  const btn = document.getElementById('btnCam');
-  const videoTrack = localStream?.getVideoTracks()[0];
-  if (videoTrack) {
-    videoTrack.enabled = !videoTrack.enabled;
-    btn.classList.toggle('active', !videoTrack.enabled);
-  }
-}
-
-// Авто-вход если в URL есть ?room=XXX
-window.addEventListener('load', () => {
-  const params = new URLSearchParams(window.location.search);
-  const roomParam = params.get('room');
-  if (roomParam) {
-    document.getElementById('roomId').value = roomParam;
-  }
-});
