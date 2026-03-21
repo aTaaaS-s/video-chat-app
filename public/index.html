@@ -1,0 +1,54 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Group Video Chat</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="login-screen" id="loginScreen">
+            <div class="login-card">
+                <h1>🎥 Group Video Chat</h1>
+                <div class="input-group">
+                    <input type="text" id="userName" placeholder="Your Name" required>
+                </div>
+                <div class="input-group">
+                    <input type="text" id="roomId" placeholder="Room ID (for joining)">
+                </div>
+                <div class="button-group">
+                    <button onclick="createRoom()">✨ Create Room</button>
+                    <button onclick="joinRoom()">🔗 Join Room</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-screen" id="chatScreen" style="display: none;">
+            <div class="header">
+                <h2>Room: <span id="currentRoomId"></span></h2>
+                <button onclick="copyRoomLink()">📋 Copy Link</button>
+                <button onclick="leaveRoom()" class="leave-btn">🚪 Leave</button>
+            </div>
+            
+            <div class="participants-info">
+                Participants: <span id="participantCount">0</span>
+            </div>
+            
+            <div class="video-grid" id="videoGrid">
+                <!-- Видео участников будут добавляться сюда -->
+            </div>
+            
+            <div class="controls">
+                <button onclick="toggleAudio()" id="audioBtn">🎤 Mute</button>
+                <button onclick="toggleVideo()" id="videoBtn">📹 Stop Video</button>
+                <button onclick="shareScreen()">🖥️ Share Screen</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>
