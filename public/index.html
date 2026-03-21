@@ -1,42 +1,264 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Group Video Chat</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Video Chat - Group Call</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        /* Login Screen */
+        .login-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-card h1 {
+            margin-bottom: 30px;
+            color: #333;
+            font-size: 28px;
+        }
+
+        .login-card input {
+            width: 100%;
+            padding: 14px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            transition: border-color 0.3s;
+        }
+
+        .login-card input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .login-card button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .login-card button:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Chat Screen */
+        .chat-screen {
+            display: none;
+            background: #f5f5f5;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h2 {
+            color: #333;
+            font-size: 18px;
+        }
+
+        .header button {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .header button:hover {
+            background: #5a67d8;
+        }
+
+        .leave-btn {
+            background: #e53e3e !important;
+        }
+
+        .leave-btn:hover {
+            background: #c53030 !important;
+        }
+
+        .participants-info {
+            background: white;
+            padding: 10px 20px;
+            color: #666;
+            font-size: 14px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            background: #f0f2f5;
+            min-height: calc(100vh - 150px);
+        }
+
+        .video-container {
+            position: relative;
+            background: #1a1a2e;
+            border-radius: 16px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-container .username {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1;
+        }
+
+        .video-container .audio-indicator {
+            position: absolute;
+            bottom: 12px;
+            right: 12px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 8px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1;
+        }
+
+        .controls {
+            background: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            border-top: 1px solid #e0e0e0;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+
+        .controls button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .controls button:hover {
+            transform: translateY(-2px);
+            background: #5a67d8;
+        }
+
+        .controls button:active {
+            transform: translateY(0);
+        }
+
+        @media (max-width: 768px) {
+            .video-grid {
+                grid-template-columns: 1fr;
+                padding: 15px;
+                margin-bottom: 70px;
+            }
+            
+            .controls button {
+                padding: 10px 18px;
+                font-size: 13px;
+            }
+            
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <div class="login-screen" id="loginScreen">
-            <div class="login-card">
-                <h1>🎥 Video Chat</h1>
-                <input type="text" id="userName" placeholder="Your Name" required>
-                <button onclick="join()">Join Chat</button>
-            </div>
-        </div>
-        
-        <div class="chat-screen" id="chatScreen" style="display: none;">
-            <div class="header">
-                <h2>Room: <span id="currentRoomId"></span></h2>
-                <button onclick="copyLink()">📋 Copy Link</button>
-                <button onclick="leave()" class="leave-btn">🚪 Leave</button>
-            </div>
-            
-            <div class="participants-info">
-                Participants: <span id="participantCount">0</span>
-            </div>
-            
-            <div class="video-grid" id="videoGrid"></div>
-            
-            <div class="controls">
-                <button onclick="toggleAudio()" id="audioBtn">🎤 Mute</button>
-                <button onclick="toggleVideo()" id="videoBtn">📹 Stop</button>
-                <button onclick="shareScreen()">🖥️ Share Screen</button>
-            </div>
+    <div class="login-screen" id="loginScreen">
+        <div class="login-card">
+            <h1>🎥 Group Video Chat</h1>
+            <input type="text" id="userName" placeholder="Enter your name" autocomplete="off">
+            <button onclick="joinChat()">Join Chat</button>
         </div>
     </div>
     
+    <div class="chat-screen" id="chatScreen">
+        <div class="header">
+            <h2>🎬 Room: Main Room</h2>
+            <button onclick="copyRoomLink()">📋 Copy Invite Link</button>
+            <button onclick="leaveRoom()" class="leave-btn">🚪 Leave</button>
+        </div>
+        
+        <div class="participants-info">
+            👥 Participants: <span id="participantCount">0</span>
+        </div>
+        
+        <div class="video-grid" id="videoGrid"></div>
+        
+        <div class="controls">
+            <button onclick="toggleAudio()" id="audioBtn">🎤 Mute</button>
+            <button onclick="toggleVideo()" id="videoBtn">📹 Stop Video</button>
+            <button onclick="shareScreen()">🖥️ Share Screen</button>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="client.js"></script>
 </body>
