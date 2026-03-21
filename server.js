@@ -17,33 +17,29 @@ const users = {};
 io.on('connection', (socket) => {
   console.log('✅ Connect:', socket.id);
   
-  // Добавляем пользователя
   socket.on('join', (userName) => {
     users[socket.id] = { id: socket.id, name: userName };
     socket.userName = userName;
     
-    console.log(`📝 ${userName} (${socket.id}) присоединился`);
-    console.log(`Всего пользователей: ${Object.keys(users).length}`);
+    console.log(`${userName} joined`);
     
-    // Отправляем НОВОМУ список ВСЕХ остальных
+    // Отправляем новому список остальных
     const others = Object.values(users).filter(u => u.id !== socket.id);
     socket.emit('usersList', others);
     
-    // Сообщаем ВСЕМ (включая нового) о новом участнике
-    io.emit('userJoined', { id: socket.id, name: userName });
+    // Сообщаем всем о новом
+    socket.broadcast.emit('userJoined', { id: socket.id, name: userName });
     
-    // Обновляем счётчик ВСЕМ
+    // Обновляем счётчик
     io.emit('count', Object.keys(users).length);
   });
 
-  // WebRTC сигнализация - отправляем КОНКРЕТНОМУ пользователю
+  // Ретрансляция WebRTC данных
   socket.on('offer', (data) => {
-    console.log(`📤 Offer: ${socket.id} -> ${data.to}`);
     io.to(data.to).emit('offer', { from: socket.id, offer: data.offer });
   });
 
   socket.on('answer', (data) => {
-    console.log(`📤 Answer: ${socket.id} -> ${data.to}`);
     io.to(data.to).emit('answer', { from: socket.id, answer: data.answer });
   });
 
@@ -51,20 +47,14 @@ io.on('connection', (socket) => {
     io.to(data.to).emit('ice', { from: socket.id, ice: data.ice });
   });
 
-  // Выход
   socket.on('disconnect', () => {
     console.log('❌ Disconnect:', socket.id);
-    if (users[socket.id]) {
-      const name = users[socket.id].name;
-      delete users[socket.id];
-      
-      io.emit('userLeft', { id: socket.id });
-      io.emit('count', Object.keys(users).length);
-      console.log(`${name} вышел. Осталось: ${Object.keys(users).length}`);
-    }
+    delete users[socket.id];
+    io.emit('userLeft', { id: socket.id });
+    io.emit('count', Object.keys(users).length);
   });
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Server on port ${PORT}`);
 });
