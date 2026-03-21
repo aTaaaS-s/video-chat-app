@@ -12,69 +12,48 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, 'public')));
 
-const users = {}; // Все пользователи
+const users = {};
 
 io.on('connection', (socket) => {
   console.log(`✅ Подключился: ${socket.id}`);
 
-  // Вход в комнату
   socket.on('join-room', (data) => {
+    const userName = data.userName || 'User';
     const roomId = 'MAIN-ROOM';
+    
     socket.join(roomId);
     socket.roomId = roomId;
-    socket.userName = data.userName || 'User';
+    socket.userName = userName;
     
-    // Сохраняем пользователя
-    users[socket.id] = {
-      id: socket.id,
-      name: socket.userName,
-      roomId: roomId
-    };
+    users[socket.id] = { id: socket.id, name: userName, roomId };
     
-    console.log(`📍 ${socket.userName} (${socket.id}) вошёл в ${roomId}`);
-    console.log(`Всего пользователей: ${Object.keys(users).length}`);
+    console.log(`📍 ${userName} (${socket.id}) вошёл`);
+    console.log(`Всего: ${Object.keys(users).length}`);
     
-    // Отправляем новому пользователю список ВСЕХ остальных
+    // Отправляем новому пользователю список остальных
     const otherUsers = Object.values(users).filter(u => u.id !== socket.id);
-    console.log(`Отправляю ${socket.id} список: ${otherUsers.length} пользователей`);
+    console.log(`Отправляю ${socket.id} список: ${otherUsers.length} чел.`);
     socket.emit('room-users', otherUsers);
     
-    // Сообщаем ВСЕМ (включая нового) о новом участнике
-    io.to(roomId).emit('user-joined', {
-      id: socket.id,
-      name: socket.userName
-    });
-    console.log(`Отправлено user-joined всем в комнате`);
+    // Сообщаем ВСЕМ в комнате о новом участнике
+    io.to(roomId).emit('user-joined', { id: socket.id, name: userName });
     
     // Обновляем счётчик
     io.to(roomId).emit('update-count', Object.keys(users).length);
   });
 
-  // WebRTC сигнализация
   socket.on('offer', (data) => {
-    console.log(`📤 Offer: ${socket.id} -> ${data.targetId}`);
-    socket.to(data.targetId).emit('offer', {
-      senderId: socket.id,
-      offer: data.offer
-    });
+    socket.to(data.targetId).emit('offer', { senderId: socket.id, offer: data.offer });
   });
 
   socket.on('answer', (data) => {
-    console.log(`📤 Answer: ${socket.id} -> ${data.targetId}`);
-    socket.to(data.targetId).emit('answer', {
-      senderId: socket.id,
-      answer: data.answer
-    });
+    socket.to(data.targetId).emit('answer', { senderId: socket.id, answer: data.answer });
   });
 
   socket.on('ice-candidate', (data) => {
-    socket.to(data.targetId).emit('ice-candidate', {
-      senderId: socket.id,
-      candidate: data.candidate
-    });
+    socket.to(data.targetId).emit('ice-candidate', { senderId: socket.id, candidate: data.candidate });
   });
 
-  // Выход
   socket.on('disconnect', () => {
     console.log(`❌ Отключился: ${socket.id}`);
     if (users[socket.id]) {
