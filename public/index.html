@@ -283,4 +283,396 @@
     </div>
   </div>
 
-  <script src="/socket.io/socket.io.js"></script
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let localStream = null;
+    let peerConnections = {};
+    let micEnabled = true;
+    let camEnabled = true;
+    let roomId = 'MAIN-ROOM';
+    let userName = null;
+
+    // WebRTC конфигурация
+    const rtcConfig = {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    };
+
+    // ===== ФУНКЦИЯ ДОБАВЛЕНИЯ ВИДЕО =====
+    function addVideo(stream, id, isLocal) {
+      const container = document.getElementById('videosContainer');
+      
+      // Проверяем не добавлено ли уже
+      if (document.getElementById(`video-${id}`)) {
+        return;
+      }
+      
+      const wrapper = document.createElement('div');
+      wrapper.className = `video-wrapper ${isLocal ? 'mirror' : ''}`;
+      wrapper.id = `video-${id}`;
+
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = isLocal;
+
+      const nameTag = document.createElement('div');
+      nameTag.className = 'user-name';
+      nameTag.textContent = isLocal ? `${userName} (Вы)` : id;
+
+      wrapper.appendChild(video);
+      wrapper.appendChild(nameTag);
+      container.appendChild(wrapper);
+      
+      log(`Видео добавлено: ${isLocal ? 'ваше' : id}`, 'video');
+    }
+
+    // ===== ПРОВЕРКА УСТРОЙСТВ =====
+    async function checkDevices() {
+      try {
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === 'audioinput');
+        const cams = devices.filter(d => d.kind === 'videoinput');
+        
+        const info = document.getElementById('deviceInfo');
+        info.innerHTML = `
+          <div>🎤 Микрофонов: <strong>${mics.length}</strong></div>
+          <div>📹 Камер: <strong>${cams.length}</strong></div>
+        `;
+      } catch (err) {
+        document.getElementById('deviceInfo').innerHTML = 
+          '<span style="color: #fc8181">⚠️ Нет доступа</span>';
+      }
+    }
+
+    checkDevices();
+
+    // ===== ВХОД В КОМНАТУ =====
+    async function startVideo() {
+      userName = document.getElementById('userName').value.trim() || 'Аноним';
+      
+      log('🚀 Запуск видеочата...', 'info');
+      setStatus('Запрос доступа к камере и микрофону...', 'warning');
+
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+
+        log('✅ Доступ получен!', 'success');
+        
+        const audioTracks = localStream.getAudioTracks();
+        const videoTracks = localStream.getVideoTracks();
+        
+        log(`Аудио треков: ${audioTracks.length}`, 'audio');
+        log(`Видео треков: ${videoTracks.length}`, 'video');
+        
+        if (audioTracks.length > 0) {
+          log(`Микрофон: ${audioTracks[0].label || 'Найден'}`, 'audio');
+        }
+        
+        if (videoTracks.length > 0) {
+          log(`Камера: ${videoTracks[0].label || 'Найдена'}`, 'video');
+        }
+
+        // Показываем своё видео
+        addVideo(localStream, userName, true);
+
+        // Обновляем статусы
+        updateStatus('mic', audioTracks[0]);
+        updateStatus('cam', videoTracks[0]);
+
+        // Показываем экран чата
+        document.getElementById('loginForm').classList.add('hidden');
+        document.getElementById('videoContainer').classList.remove('hidden');
+        setStatus('✅ Подключено к MAIN-ROOM', 'success');
+
+        // Подключаемся к комнате
+        socket.emit('join-room', { roomId, userName });
+
+        // Запускаем тест микрофона
+        setTimeout(testMicrophone, 2000);
+
+      } catch (err) {
+        log(`❌ Ошибка: ${err.message}`, 'error');
+        setStatus('Ошибка: ' + err.message, 'error');
+        
+        let helpMsg = '';
+        if (err.name === 'NotAllowedError') {
+          helpMsg = '\n\n💡 Разрешите доступ в настройках браузера';
+        }
+        
+        alert('Не удалось получить доступ:\n' + err.message + helpMsg);
+      }
+    }
+
+    // ===== СОЗДАНИЕ PEER CONNECTION =====
+    function createPeerConnection(targetId) {
+      if (peerConnections[targetId]) {
+        return peerConnections[targetId];
+      }
+      
+      const pc = new RTCPeerConnection(rtcConfig);
+
+      localStream.getTracks().forEach(track => {
+        pc.addTrack(track, localStream);
+      });
+
+      pc.ontrack = (event) => {
+        log(`Получено видео от ${targetId}`, 'video');
+        addVideo(event.streams[0], targetId, false);
+      };
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          socket.emit('ice-candidate', {
+            targetId,
+            candidate: event.candidate
+          });
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        log(`Соединение с ${targetId}: ${pc.connectionState}`, 'info');
+      };
+
+      peerConnections[targetId] = pc;
+      return pc;
+    }
+
+    // ===== СОБЫТИЯ SOCKET.IO =====
+    socket.on('user-joined', async ({ id, name }) => {
+      log(`👤 ${name} присоединился`, 'info');
+      const pc = createPeerConnection(id);
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      socket.emit('offer', { targetId: id, offer });
+    });
+
+    socket.on('offer', async ({ senderId, offer }) => {
+      log(`Получен offer от ${senderId}`, 'info');
+      const pc = createPeerConnection(senderId);
+
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      socket.emit('answer', { targetId: senderId, answer });
+    });
+
+    socket.on('answer', async ({ senderId, answer }) => {
+      const pc = peerConnections[senderId];
+      if (pc) {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    });
+
+    socket.on('ice-candidate', async ({ senderId, candidate }) => {
+      const pc = peerConnections[senderId];
+      if (pc && candidate) {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    });
+
+    socket.on('user-left', ({ id }) => {
+      log(`👤 Пользователь ${id} вышел`, 'info');
+      if (peerConnections[id]) {
+        peerConnections[id].close();
+        delete peerConnections[id];
+      }
+      const videoEl = document.getElementById(`video-${id}`);
+      if (videoEl) videoEl.remove();
+    });
+
+    socket.on('room-users', (users) => {
+      log(`В комнате ${users.length} других пользователей`, 'info');
+      users.forEach(({ id }) => {
+        createPeerConnection(id);
+      });
+      updateParticipantsList(users);
+    });
+
+    socket.on('room-update', (users) => {
+      updateParticipantsList(users);
+    });
+
+    // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
+    function updateParticipantsList(users) {
+      const count = users.length + 1; // +1 это вы
+      document.getElementById('userCount').textContent = count;
+      
+      const list = document.getElementById('usersList');
+      list.innerHTML = users.map(u => `<div class="participant">👤 ${u.name}</div>`).join('');
+      list.innerHTML += `<div class="participant" style="background: rgba(102, 126, 234, 0.3);">👤 ${userName} (Вы)</div>`;
+    }
+
+    function updateStatus(type, track) {
+      const btn = document.getElementById(`btn${type === 'mic' ? 'Mic' : 'Cam'}`);
+      if (!btn || !track) return;
+      
+      if (type === 'mic') {
+        btn.textContent = track.enabled ? '🎤 Микрофон ВКЛ' : '🔇 Микрофон ВЫКЛ';
+        btn.className = `btn-control ${track.enabled ? 'success' : 'active'}`;
+      } else {
+        btn.textContent = track.enabled ? '📷 Камера ВКЛ' : '📵 Камера ВЫКЛ';
+        btn.className = `btn-control ${track.enabled ? 'success' : 'active'}`;
+      }
+    }
+
+    function testMicrophone() {
+      const audioTrack = localStream?.getAudioTracks()[0];
+      
+      if (!audioTrack) {
+        log('❌ Аудио трек не найден', 'error');
+        return;
+      }
+      
+      if (!audioTrack.enabled) {
+        log('⚠️ Аудио трек выключен', 'warning');
+        return;
+      }
+
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaStreamSource(localStream);
+        
+        source.connect(analyser);
+        analyser.fftSize = 256;
+        
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        log('🎤 Тест микрофона...', 'audio');
+        
+        let checks = 0;
+        let maxLevel = 0;
+        
+        function check() {
+          analyser.getByteFrequencyData(dataArray);
+          const average = dataArray.reduce((a,b) => a+b) / dataArray.length;
+          const peak = Math.max(...dataArray);
+          
+          checks++;
+          maxLevel = Math.max(maxLevel, average);
+          
+          if (checks <= 5) {
+            log(`Уровень #${checks}: ${Math.round(average)}`, 'audio');
+            
+            if (average > 5) {
+              log('✅ МИКРОФОН РАБОТАЕТ!', 'success');
+              setStatus('✅ Всё работает! Говорите...', 'success');
+              return;
+            }
+          }
+          
+          if (checks < 5 && micEnabled) {
+            setTimeout(check, 1000);
+          } else if (maxLevel < 5) {
+            log('⚠️ Звук очень тихий', 'warning');
+          }
+        }
+        
+        check();
+        
+      } catch (err) {
+        log(`Ошибка теста: ${err.message}`, 'error');
+      }
+    }
+
+    function toggleMic() {
+      const track = localStream?.getAudioTracks()[0];
+      if (!track) {
+        log('❌ Аудио трек не найден', 'error');
+        return;
+      }
+      
+      micEnabled = !micEnabled;
+      track.enabled = micEnabled;
+      updateStatus('mic', track);
+      log(micEnabled ? '🎤 Микрофон ВКЛ' : '🔇 Микрофон ВЫКЛ', 'audio');
+      
+      if (micEnabled) {
+        setTimeout(testMicrophone, 1000);
+      }
+    }
+
+    function toggleCam() {
+      const track = localStream?.getVideoTracks()[0];
+      if (!track) {
+        log('❌ Видео трек не найден', 'error');
+        return;
+      }
+      
+      camEnabled = !camEnabled;
+      track.enabled = camEnabled;
+      updateStatus('cam', track);
+      log(camEnabled ? '📷 Камера ВКЛ' : '📵 Камера ВЫКЛ', 'video');
+    }
+
+    function copyLink() {
+      const url = window.location.origin;
+      navigator.clipboard.writeText(url).then(() => {
+        alert('✅ Ссылка скопирована!\n\nОтправьте её другу:\n\n' + url + '\n\nОн подключится в эту же комнату!');
+      }).catch(() => {
+        prompt('Скопируйте ссылку:', url);
+      });
+    }
+
+    function stopVideo() {
+      Object.values(peerConnections).forEach(pc => pc.close());
+      peerConnections = {};
+      
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      
+      document.getElementById('videosContainer').innerHTML = '';
+      document.getElementById('videoContainer').classList.add('hidden');
+      document.getElementById('loginForm').classList.remove('hidden');
+      document.getElementById('debug').innerHTML = '';
+      
+      userName = null;
+    }
+
+    function log(msg, type = 'info') {
+      const debug = document.getElementById('debug');
+      const div = document.createElement('div');
+      
+      const icons = {
+        'info': 'ℹ️',
+        'success': '✅',
+        'error': '❌',
+        'warning': '⚠️',
+        'audio': '🔊',
+        'video': '📹'
+      };
+      
+      div.textContent = `${icons[type] || 'ℹ️'} ${msg}`;
+      debug.appendChild(div);
+      debug.scrollTop = debug.scrollHeight;
+      console.log(msg);
+    }
+
+    function setStatus(msg, type = 'info') {
+      const status = document.getElementById('status');
+      status.textContent = msg;
+      status.className = type;
+    }
+
+    // Автозаполнение имени из URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('name')) {
+      document.getElementById('userName').value = params.get('name');
+    }
+  </script>
+</body>
+</html>
