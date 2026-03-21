@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,33 +10,26 @@
   <div class="container">
     <h1>🎥 Видеочат</h1>
     
-    <div id="loginForm" class="form-group">
-      <input type="text" id="userName" placeholder="Ваше имя">
-      <div style="text-align:center; margin:15px 0; padding:15px; background:rgba(102,126,234,0.2); border-radius:10px;">
-        <div style="font-size:20px; font-weight:bold; color:#667eea;">MAIN-ROOM</div>
-        <div style="font-size:12px; color:#aaa;">Общая комната</div>
-      </div>
-      <button onclick="startVideo()" class="btn-primary">📹 Войти</button>
+    <div id="login">
+      <input type="text" id="nameInput" placeholder="Ваше имя">
+      <button onclick="join()">📹 Войти</button>
     </div>
 
-    <div id="videoContainer" class="hidden">
-      <div class="room-info">
-        <h2>📍 MAIN-ROOM</h2>
-        <p>Участников: <span id="userCount">1</span></p>
+    <div id="chat" style="display:none">
+      <div class="info">
+        <div>👥 Участников: <span id="count">1</span></div>
+        <button onclick="copyLink()" class="btn-copy">📋 Ссылка</button>
       </div>
       
-      <div id="status">Подключено</div>
-      <button onclick="copyLink()" class="btn-copy">📋 Скопировать ссылку</button>
-      
-      <div id="videosContainer"></div>
+      <div id="videos"></div>
       
       <div class="controls">
-        <button id="btnMic" onclick="toggleMic()" class="btn-control">🎤 ВКЛ</button>
-        <button id="btnCam" onclick="toggleCam()" class="btn-control">📷 ВКЛ</button>
-        <button onclick="stopVideo()" class="btn-control">❌ Выйти</button>
+        <button id="btnMic" onclick="toggleMic()">🎤 ВКЛ</button>
+        <button id="btnCam" onclick="toggleCam()">📷 ВКЛ</button>
+        <button onclick="location.reload()">❌ Выход</button>
       </div>
       
-      <div id="debug"></div>
+      <div id="log"></div>
     </div>
   </div>
 
