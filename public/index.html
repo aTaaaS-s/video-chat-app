@@ -1,18 +1,154 @@
-<!-- Добавь после controls -->
-<div class="status-bar" style="background: rgba(0,0,0,0.6); padding: 10px; text-align: center; font-size: 12px;">
-  <span id="micStatus">🎤 Проверка...</span> | 
-  <span id="camStatus">📹 Проверка...</span> |
-  <button onclick="testAudio()" style="margin-left: 10px; padding: 3px 8px; cursor: pointer;">🔊 Тест звука</button>
-</div>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Видеочат</title>
+  <style>
+    body { font-family: Arial; margin: 0; padding: 20px; background: #1a1a2e; color: white; }
+    .container { max-width: 800px; margin: 0 auto; }
+    input { padding: 10px; margin: 5px; width: 200px; }
+    button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    #videoContainer { margin-top: 20px; }
+    video { width: 100%; max-width: 640px; border-radius: 10px; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎥 Простой видеочат</h1>
+    
+    <div id="loginForm">
+      <input type="text" id="userName" placeholder="Ваше имя"><br>
+      <input type="text" id="roomId" placeholder="Комната"><br>
+      <button onclick="startVideo()">📹 Начать видео</button>
+    </div>
 
-<script>
-function testAudio() {
-  const audioTrack = localStream?.getAudioTracks()[0];
-  if (audioTrack) {
-    const settings = audioTrack.getSettings();
-    alert(`Микрофон:\n• Название: ${audioTrack.label}\n• Включен: ${audioTrack.enabled}\n• Устройство: ${settings.deviceId || 'default'}`);
-  } else {
-    alert('Микрофон не найден!');
-  }
-}
-</script>
+    <div id="videoContainer" class="hidden">
+      <h2 id="status">Статус: ...</h2>
+      <video id="localVideo" autoplay playsinline muted></video>
+      <div>
+        <button onclick="toggleMic()">🎤 Микрофон</button>
+        <button onclick="toggleCam()">📷 Камера</button>
+        <button onclick="stopVideo()">❌ Стоп</button>
+      </div>
+      <div id="debug" style="margin-top: 20px; background: #000; padding: 10px; font-size: 12px;"></div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let localStream = null;
+    let micEnabled = true;
+    let camEnabled = true;
+
+    function log(msg) {
+      const debug = document.getElementById('debug');
+      debug.innerHTML += '<br>' + msg;
+      console.log(msg);
+    }
+
+    async function startVideo() {
+      const name = document.getElementById('userName').value || 'Аноним';
+      const room = document.getElementById('roomId').value || 'room1';
+      
+      log('🚀 Запуск видео...');
+      document.getElementById('status').textContent = 'Запрос доступа...';
+
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+
+        log('✅ Доступ получен!');
+        log('🎤 Аудио треков: ' + localStream.getAudioTracks().length);
+        log('📹 Видео треков: ' + localStream.getVideoTracks().length);
+
+        const video = document.getElementById('localVideo');
+        video.srcObject = localStream;
+
+        document.getElementById('loginForm').classList.add('hidden');
+        document.getElementById('videoContainer').classList.remove('hidden');
+        document.getElementById('status').textContent = '✅ Работает! Комната: ' + room;
+
+        // Проверяем микрофон через 2 секунды
+        setTimeout(checkAudio, 2000);
+
+      } catch (err) {
+        log('❌ Ошибка: ' + err.message);
+        alert('Не удалось получить доступ:\n' + err.message);
+      }
+    }
+
+    function checkAudio() {
+      const audioTrack = localStream?.getAudioTracks()[0];
+      if (!audioTrack) {
+        log('⚠️ АУДИО ТРЕК НЕ НАЙДЕН!');
+        return;
+      }
+
+      // Создаем анализатор
+      const audioContext = new AudioContext();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(localStream);
+      source.connect(analyser);
+      analyser.fftSize = 256;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      let checks = 0;
+      function checkLevel() {
+        analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a,b) => a+b) / dataArray.length;
+        
+        checks++;
+        log(`🔊 Уровень звука #${checks}: ${Math.round(average)}`);
+        
+        if (average > 10) {
+          log('✅ МИКРОФОН РАБОТАЕТ!');
+        }
+        
+        if (checks < 5 && micEnabled) {
+          setTimeout(checkLevel, 1000);
+        }
+      }
+      
+      checkLevel();
+    }
+
+    function toggleMic() {
+      const track = localStream?.getAudioTracks()[0];
+      if (track) {
+        micEnabled = !micEnabled;
+        track.enabled = micEnabled;
+        log(micEnabled ? '🎤 Микрофон ВКЛ' : '🔇 Микрофон ВЫКЛ');
+      }
+    }
+
+    function toggleCam() {
+      const track = localStream?.getVideoTracks()[0];
+      if (track) {
+        camEnabled = !camEnabled;
+        track.enabled = camEnabled;
+        log(camEnabled ? '📹 Камера ВКЛ' : '📵 Камера ВЫКЛ');
+      }
+    }
+
+    function stopVideo() {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+      }
+      location.reload();
+    }
+
+    // Автозаполнение комнаты из URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('room')) {
+      document.getElementById('roomId').value = params.get('room');
+    }
+  </script>
+</body>
+</html>
