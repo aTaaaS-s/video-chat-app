@@ -2,29 +2,26 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>🎥 Видеочат</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-      margin: 0; 
-      padding: 10px; 
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); 
       color: white;
       min-height: 100vh;
+      padding: 10px;
     }
     .container { max-width: 1200px; margin: 0 auto; }
-    h1 { margin-bottom: 20px; font-size: 28px; text-align: center; }
+    h1 { text-align: center; margin: 20px 0; font-size: 28px; }
     
     .form-group { 
       background: rgba(255,255,255,0.1); 
       padding: 30px; 
       border-radius: 15px; 
-      margin-bottom: 20px;
       max-width: 500px;
-      margin-left: auto;
-      margin-right: auto;
+      margin: 0 auto 20px;
     }
     
     input { 
@@ -38,7 +35,6 @@
       font-size: 16px;
     }
     
-    input::placeholder { color: #aaa; }
     input:focus { outline: none; border-color: #667eea; }
     
     button { 
@@ -49,10 +45,7 @@
       border-radius: 10px;
       font-size: 16px;
       font-weight: 600;
-      transition: all 0.2s;
     }
-    
-    button:active { transform: scale(0.95); }
     
     .btn-primary { 
       background: linear-gradient(135deg, #667eea, #764ba2); 
@@ -61,8 +54,6 @@
       margin-top: 15px;
     }
     
-    .btn-primary:hover { transform: translateY(-2px); }
-    
     .btn-control { 
       background: rgba(255,255,255,0.2); 
       color: white;
@@ -70,21 +61,22 @@
       min-width: 120px;
     }
     
-    .btn-control.active { background: #e53e3e; }
     .btn-control.success { background: #48bb78; }
+    .btn-control.active { background: #e53e3e; }
     
     .btn-copy {
       background: linear-gradient(135deg, #667eea, #764ba2);
       color: white;
       width: 100%;
       margin: 15px 0;
+      padding: 16px;
     }
     
     #videoContainer { 
-      margin-top: 20px; 
       background: rgba(0,0,0,0.3);
       padding: 20px;
       border-radius: 15px;
+      margin-top: 20px;
     }
     
     .room-info {
@@ -93,17 +85,6 @@
       border-radius: 10px;
       text-align: center;
       margin-bottom: 20px;
-    }
-    
-    .room-info h2 {
-      font-size: 24px;
-      color: #667eea;
-      margin-bottom: 5px;
-    }
-    
-    .room-info p {
-      color: #aaa;
-      font-size: 14px;
     }
     
     #videosContainer {
@@ -141,17 +122,9 @@
       font-size: 14px;
     }
     
-    video { 
-      width: 100%; 
-      border-radius: 10px;
-      background: #000;
-      display: block;
-    }
-    
     .controls { 
       display: flex; 
       gap: 10px; 
-      margin-top: 15px;
       flex-wrap: wrap;
     }
     
@@ -161,62 +134,31 @@
       border-radius: 10px;
       margin-bottom: 15px;
       text-align: center;
-      font-weight: 500;
     }
     
-    #status.error { background: rgba(229, 62, 62, 0.3); }
     #status.success { background: rgba(72, 187, 120, 0.3); }
     #status.warning { background: rgba(237, 137, 54, 0.3); }
+    #status.error { background: rgba(229, 62, 62, 0.3); }
     
     #debug { 
       margin-top: 20px; 
       background: #000; 
       padding: 15px; 
       border-radius: 10px;
-      font-size: 13px;
+      font-size: 12px;
       max-height: 300px;
       overflow-y: auto;
       font-family: 'Courier New', monospace;
     }
     
     #debug div { 
-      padding: 4px 0; 
+      padding: 3px 0; 
       border-bottom: 1px solid #333;
-    }
-    
-    .device-info {
-      background: rgba(255,255,255,0.05);
-      padding: 12px;
-      border-radius: 8px;
-      margin: 15px 0;
-      font-size: 14px;
-    }
-    
-    .participants {
-      background: rgba(255,255,255,0.05);
-      padding: 12px;
-      border-radius: 8px;
-      margin: 15px 0;
-    }
-    
-    .participants h3 {
-      margin-bottom: 8px;
-      font-size: 16px;
-    }
-    
-    .participant {
-      padding: 5px 10px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 5px;
-      margin: 5px 0;
-      font-size: 14px;
     }
     
     .hidden { display: none !important; }
     
     @media (max-width: 600px) {
-      h1 { font-size: 22px; }
-      .form-group { padding: 20px; }
       #videosContainer { grid-template-columns: 1fr; }
       .controls { flex-direction: column; }
       .btn-control { width: 100%; }
@@ -227,56 +169,33 @@
   <div class="container">
     <h1>🎥 Видеочат</h1>
     
-    <!-- Экран входа -->
     <div id="loginForm" class="form-group">
       <input type="text" id="userName" placeholder="Ваше имя" maxlength="20">
       
-      <div class="device-info" id="deviceInfo">
-        🔍 Поиск устройств...
-      </div>
-      
       <div style="background: rgba(102, 126, 234, 0.2); padding: 20px; border-radius: 10px; margin: 20px 0; text-align: center;">
-        <div style="font-size: 14px; color: #aaa; margin-bottom: 8px;">📍 Общая комната</div>
-        <div style="font-size: 24px; font-weight: bold; color: #667eea;">MAIN-ROOM</div>
-        <div style="font-size: 13px; color: #888; margin-top: 8px;">Все пользователи подключаются сюда</div>
+        <div style="font-size: 24px; font-weight: bold; color: #667eea; margin: 10px 0;">MAIN-ROOM</div>
+        <div style="font-size: 13px; color: #888;">Общая комната для всех</div>
       </div>
       
       <button onclick="startVideo()" class="btn-primary">📹 Войти в видеочат</button>
-      
-      <div style="margin-top: 20px; font-size: 13px; color: #888; text-align: center;">
-        💡 Разрешите доступ к камере и микрофону<br>
-        Отправьте ссылку другу чтобы подключиться
-      </div>
     </div>
 
-    <!-- Экран видеочата -->
     <div id="videoContainer" class="hidden">
       <div class="room-info">
         <h2>📍 MAIN-ROOM</h2>
-        <p>Общая комната для всех</p>
+        <p>Участников: <span id="userCount">1</span></p>
       </div>
       
       <div id="status">Подключение...</div>
-      
-      <div class="participants" id="participantsList">
-        <h3>👥 Участники: <span id="userCount">0</span></h3>
-        <div id="usersList"></div>
-      </div>
       
       <button onclick="copyLink()" class="btn-copy">📋 Скопировать ссылку для друга</button>
       
       <div id="videosContainer"></div>
       
       <div class="controls">
-        <button id="btnMic" onclick="toggleMic()" class="btn-control success">
-          🎤 Микрофон ВКЛ
-        </button>
-        <button id="btnCam" onclick="toggleCam()" class="btn-control success">
-          📷 Камера ВКЛ
-        </button>
-        <button onclick="stopVideo()" class="btn-control">
-          ❌ Выйти
-        </button>
+        <button id="btnMic" onclick="toggleMic()" class="btn-control success">🎤 Микрофон ВКЛ</button>
+        <button id="btnCam" onclick="toggleCam()" class="btn-control success">📷 Камера ВКЛ</button>
+        <button onclick="stopVideo()" class="btn-control">❌ Выйти</button>
       </div>
       
       <div id="debug"></div>
@@ -290,23 +209,42 @@
     let peerConnections = {};
     let micEnabled = true;
     let camEnabled = true;
-    let roomId = 'MAIN-ROOM';
+    const roomId = 'MAIN-ROOM';
     let userName = null;
+    let mySocketId = null;
 
-    // WebRTC конфигурация
+    // Улучшенная WebRTC конфигурация
     const rtcConfig = {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
+      ],
+      iceCandidatePoolSize: 10
     };
 
-    // ===== ФУНКЦИЯ ДОБАВЛЕНИЯ ВИДЕО =====
+    function log(msg) {
+      const debug = document.getElementById('debug');
+      const div = document.createElement('div');
+      div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      debug.appendChild(div);
+      debug.scrollTop = debug.scrollHeight;
+      console.log(msg);
+    }
+
+    function setStatus(msg, type = '') {
+      const status = document.getElementById('status');
+      status.textContent = msg;
+      status.className = type;
+    }
+
     function addVideo(stream, id, isLocal) {
       const container = document.getElementById('videosContainer');
       
-      // Проверяем не добавлено ли уже
       if (document.getElementById(`video-${id}`)) {
+        log(`Видео ${id} уже добавлено`);
         return;
       }
       
@@ -328,36 +266,14 @@
       wrapper.appendChild(nameTag);
       container.appendChild(wrapper);
       
-      log(`Видео добавлено: ${isLocal ? 'ваше' : id}`, 'video');
+      log(`✅ Видео добавлено: ${isLocal ? 'ваше' : id}`);
     }
 
-    // ===== ПРОВЕРКА УСТРОЙСТВ =====
-    async function checkDevices() {
-      try {
-        await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const mics = devices.filter(d => d.kind === 'audioinput');
-        const cams = devices.filter(d => d.kind === 'videoinput');
-        
-        const info = document.getElementById('deviceInfo');
-        info.innerHTML = `
-          <div>🎤 Микрофонов: <strong>${mics.length}</strong></div>
-          <div>📹 Камер: <strong>${cams.length}</strong></div>
-        `;
-      } catch (err) {
-        document.getElementById('deviceInfo').innerHTML = 
-          '<span style="color: #fc8181">⚠️ Нет доступа</span>';
-      }
-    }
-
-    checkDevices();
-
-    // ===== ВХОД В КОМНАТУ =====
     async function startVideo() {
       userName = document.getElementById('userName').value.trim() || 'Аноним';
       
-      log('🚀 Запуск видеочата...', 'info');
-      setStatus('Запрос доступа к камере и микрофону...', 'warning');
+      log('🚀 Запуск видеочата...');
+      setStatus('Запрос доступа...', 'warning');
 
       try {
         localStream = await navigator.mediaDevices.getUserMedia({
@@ -365,72 +281,51 @@
           audio: true
         });
 
-        log('✅ Доступ получен!', 'success');
-        
-        const audioTracks = localStream.getAudioTracks();
-        const videoTracks = localStream.getVideoTracks();
-        
-        log(`Аудио треков: ${audioTracks.length}`, 'audio');
-        log(`Видео треков: ${videoTracks.length}`, 'video');
-        
-        if (audioTracks.length > 0) {
-          log(`Микрофон: ${audioTracks[0].label || 'Найден'}`, 'audio');
-        }
-        
-        if (videoTracks.length > 0) {
-          log(`Камера: ${videoTracks[0].label || 'Найдена'}`, 'video');
-        }
+        log('✅ Доступ получен!');
+        log(`Аудио треков: ${localStream.getAudioTracks().length}`);
+        log(`Видео треков: ${localStream.getVideoTracks().length}`);
 
-        // Показываем своё видео
         addVideo(localStream, userName, true);
-
-        // Обновляем статусы
-        updateStatus('mic', audioTracks[0]);
-        updateStatus('cam', videoTracks[0]);
-
-        // Показываем экран чата
         document.getElementById('loginForm').classList.add('hidden');
         document.getElementById('videoContainer').classList.remove('hidden');
-        setStatus('✅ Подключено к MAIN-ROOM', 'success');
+        setStatus('✅ Подключено', 'success');
 
-        // Подключаемся к комнате
         socket.emit('join-room', { roomId, userName });
-
-        // Запускаем тест микрофона
         setTimeout(testMicrophone, 2000);
 
       } catch (err) {
-        log(`❌ Ошибка: ${err.message}`, 'error');
-        setStatus('Ошибка: ' + err.message, 'error');
-        
-        let helpMsg = '';
-        if (err.name === 'NotAllowedError') {
-          helpMsg = '\n\n💡 Разрешите доступ в настройках браузера';
-        }
-        
-        alert('Не удалось получить доступ:\n' + err.message + helpMsg);
+        log(`❌ Ошибка: ${err.message}`);
+        setStatus(`Ошибка: ${err.message}`, 'error');
+        alert(err.message);
       }
     }
 
-    // ===== СОЗДАНИЕ PEER CONNECTION =====
     function createPeerConnection(targetId) {
       if (peerConnections[targetId]) {
+        log(`PeerConnection с ${targetId} уже существует`);
         return peerConnections[targetId];
       }
       
+      log(`🔧 Создание PeerConnection для ${targetId}`);
       const pc = new RTCPeerConnection(rtcConfig);
 
+      // Добавляем треки
       localStream.getTracks().forEach(track => {
         pc.addTrack(track, localStream);
+        log(`Добавлен трек: ${track.kind}`);
       });
 
+      // Когда получаем удалённый трек
       pc.ontrack = (event) => {
-        log(`Получено видео от ${targetId}`, 'video');
-        addVideo(event.streams[0], targetId, false);
+        log(`📹 Получен ${event.track.kind} трек от ${targetId}`);
+        const stream = event.streams[0];
+        addVideo(stream, targetId, false);
       };
 
+      // ICE кандидаты
       pc.onicecandidate = (event) => {
         if (event.candidate) {
+          log(`❄️ ICE кандидат для ${targetId}`);
           socket.emit('ice-candidate', {
             targetId,
             candidate: event.candidate
@@ -438,52 +333,113 @@
         }
       };
 
+      pc.oniceconnectionstatechange = () => {
+        log(`🔌 ICE состояние с ${targetId}: ${pc.iceConnectionState}`);
+        
+        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+          setStatus('✅ Соединение установлено!', 'success');
+        } else if (pc.iceConnectionState === 'failed') {
+          log(`❌ Соединение с ${targetId} не удалось`);
+        }
+      };
+
       pc.onconnectionstatechange = () => {
-        log(`Соединение с ${targetId}: ${pc.connectionState}`, 'info');
+        log(`📡 Connection state: ${pc.connectionState}`);
+      };
+
+      pc.onnegotiationneeded = async () => {
+        log(`🔄 Negotiation needed с ${targetId}`);
       };
 
       peerConnections[targetId] = pc;
+      log(`✅ PeerConnection создан для ${targetId}`);
       return pc;
     }
 
-    // ===== СОБЫТИЯ SOCKET.IO =====
+    // ===== СОБЫТИЯ =====
+    socket.on('connect', () => {
+      mySocketId = socket.id;
+      log(`🔌 Подключён к серверу. ID: ${mySocketId}`);
+    });
+
     socket.on('user-joined', async ({ id, name }) => {
-      log(`👤 ${name} присоединился`, 'info');
+      log(`👤 ${name} (${id}) присоединился`);
+      
       const pc = createPeerConnection(id);
 
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        log(`📤 Отправляю offer ${id}`);
 
-      socket.emit('offer', { targetId: id, offer });
+        // Ждём немного перед отправкой
+        setTimeout(() => {
+          socket.emit('offer', { 
+            targetId: id, 
+            offer: pc.localDescription 
+          });
+        }, 500);
+
+      } catch (err) {
+        log(`❌ Ошибка создания offer: ${err.message}`);
+      }
     });
 
     socket.on('offer', async ({ senderId, offer }) => {
-      log(`Получен offer от ${senderId}`, 'info');
+      log(`📥 Получен offer от ${senderId}`);
+      
       const pc = createPeerConnection(senderId);
 
-      await pc.setRemoteDescription(new RTCSessionDescription(offer));
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
+      try {
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        log(`✅ Remote description установлен (offer)`);
+        
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        log(`📤 Отправляю answer ${senderId}`);
 
-      socket.emit('answer', { targetId: senderId, answer });
+        setTimeout(() => {
+          socket.emit('answer', { 
+            targetId: senderId, 
+            answer: pc.localDescription 
+          });
+        }, 500);
+
+      } catch (err) {
+        log(`❌ Ошибка обработки offer: ${err.message}`);
+      }
     });
 
     socket.on('answer', async ({ senderId, answer }) => {
+      log(`📥 Получен answer от ${senderId}`);
+      
       const pc = peerConnections[senderId];
       if (pc) {
-        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+        try {
+          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          log(`✅ Remote description установлен (answer)`);
+        } catch (err) {
+          log(`❌ Ошибка установки answer: ${err.message}`);
+        }
       }
     });
 
     socket.on('ice-candidate', async ({ senderId, candidate }) => {
+      log(`❄️ Получен ICE кандидат от ${senderId}`);
+      
       const pc = peerConnections[senderId];
       if (pc && candidate) {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          log(`✅ ICE кандидат добавлен`);
+        } catch (err) {
+          log(`❌ Ошибка добавления ICE: ${err.message}`);
+        }
       }
     });
 
     socket.on('user-left', ({ id }) => {
-      log(`👤 Пользователь ${id} вышел`, 'info');
+      log(`👤 ${id} вышел`);
       if (peerConnections[id]) {
         peerConnections[id].close();
         delete peerConnections[id];
@@ -493,136 +449,70 @@
     });
 
     socket.on('room-users', (users) => {
-      log(`В комнате ${users.length} других пользователей`, 'info');
-      users.forEach(({ id }) => {
+      log(`👥 В комнате ${users.length} других пользователей`);
+      document.getElementById('userCount').textContent = users.length + 1;
+      
+      users.forEach(({ id, name }) => {
+        log(`Создаю соединение с ${name} (${id})`);
         createPeerConnection(id);
       });
-      updateParticipantsList(users);
     });
 
-    socket.on('room-update', (users) => {
-      updateParticipantsList(users);
-    });
-
-    // ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
-    function updateParticipantsList(users) {
-      const count = users.length + 1; // +1 это вы
-      document.getElementById('userCount').textContent = count;
-      
-      const list = document.getElementById('usersList');
-      list.innerHTML = users.map(u => `<div class="participant">👤 ${u.name}</div>`).join('');
-      list.innerHTML += `<div class="participant" style="background: rgba(102, 126, 234, 0.3);">👤 ${userName} (Вы)</div>`;
-    }
-
-    function updateStatus(type, track) {
-      const btn = document.getElementById(`btn${type === 'mic' ? 'Mic' : 'Cam'}`);
-      if (!btn || !track) return;
-      
-      if (type === 'mic') {
-        btn.textContent = track.enabled ? '🎤 Микрофон ВКЛ' : '🔇 Микрофон ВЫКЛ';
-        btn.className = `btn-control ${track.enabled ? 'success' : 'active'}`;
-      } else {
-        btn.textContent = track.enabled ? '📷 Камера ВКЛ' : '📵 Камера ВЫКЛ';
-        btn.className = `btn-control ${track.enabled ? 'success' : 'active'}`;
-      }
-    }
-
-    function testMicrophone() {
-      const audioTrack = localStream?.getAudioTracks()[0];
-      
-      if (!audioTrack) {
-        log('❌ Аудио трек не найден', 'error');
-        return;
-      }
-      
-      if (!audioTrack.enabled) {
-        log('⚠️ Аудио трек выключен', 'warning');
-        return;
-      }
-
-      try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const analyser = audioContext.createAnalyser();
-        const source = audioContext.createMediaStreamSource(localStream);
-        
-        source.connect(analyser);
-        analyser.fftSize = 256;
-        
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        
-        log('🎤 Тест микрофона...', 'audio');
-        
-        let checks = 0;
-        let maxLevel = 0;
-        
-        function check() {
-          analyser.getByteFrequencyData(dataArray);
-          const average = dataArray.reduce((a,b) => a+b) / dataArray.length;
-          const peak = Math.max(...dataArray);
-          
-          checks++;
-          maxLevel = Math.max(maxLevel, average);
-          
-          if (checks <= 5) {
-            log(`Уровень #${checks}: ${Math.round(average)}`, 'audio');
-            
-            if (average > 5) {
-              log('✅ МИКРОФОН РАБОТАЕТ!', 'success');
-              setStatus('✅ Всё работает! Говорите...', 'success');
-              return;
-            }
-          }
-          
-          if (checks < 5 && micEnabled) {
-            setTimeout(check, 1000);
-          } else if (maxLevel < 5) {
-            log('⚠️ Звук очень тихий', 'warning');
-          }
-        }
-        
-        check();
-        
-      } catch (err) {
-        log(`Ошибка теста: ${err.message}`, 'error');
-      }
-    }
-
+    // ===== УПРАВЛЕНИЕ =====
     function toggleMic() {
       const track = localStream?.getAudioTracks()[0];
-      if (!track) {
-        log('❌ Аудио трек не найден', 'error');
-        return;
-      }
+      const btn = document.getElementById('btnMic');
       
-      micEnabled = !micEnabled;
-      track.enabled = micEnabled;
-      updateStatus('mic', track);
-      log(micEnabled ? '🎤 Микрофон ВКЛ' : '🔇 Микрофон ВЫКЛ', 'audio');
-      
-      if (micEnabled) {
-        setTimeout(testMicrophone, 1000);
+      if (track) {
+        micEnabled = !micEnabled;
+        track.enabled = micEnabled;
+        btn.textContent = micEnabled ? '🎤 Микрофон ВКЛ' : '🔇 Микрофон ВЫКЛ';
+        btn.className = `btn-control ${micEnabled ? 'success' : 'active'}`;
+        log(micEnabled ? '🎤 Микрофон включён' : '🔇 Микрофон выключен');
       }
     }
 
     function toggleCam() {
       const track = localStream?.getVideoTracks()[0];
-      if (!track) {
-        log('❌ Видео трек не найден', 'error');
-        return;
-      }
+      const btn = document.getElementById('btnCam');
       
-      camEnabled = !camEnabled;
-      track.enabled = camEnabled;
-      updateStatus('cam', track);
-      log(camEnabled ? '📷 Камера ВКЛ' : '📵 Камера ВЫКЛ', 'video');
+      if (track) {
+        camEnabled = !camEnabled;
+        track.enabled = camEnabled;
+        btn.textContent = camEnabled ? '📷 Камера ВКЛ' : '📵 Камера ВЫКЛ';
+        btn.className = `btn-control ${camEnabled ? 'success' : 'active'}`;
+        log(camEnabled ? '📷 Камера включена' : '📵 Камера выключена');
+      }
+    }
+
+    function testMicrophone() {
+      const audioTrack = localStream?.getAudioTracks()[0];
+      if (!audioTrack || !audioTrack.enabled) return;
+
+      const audioContext = new AudioContext();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(localStream);
+      source.connect(analyser);
+      analyser.fftSize = 256;
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      function check() {
+        if (!micEnabled) return;
+        analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a,b) => a+b) / dataArray.length;
+        if (average > 5) {
+          log('✅ Микрофон работает!');
+        }
+        setTimeout(check, 2000);
+      }
+      check();
     }
 
     function copyLink() {
       const url = window.location.origin;
       navigator.clipboard.writeText(url).then(() => {
-        alert('✅ Ссылка скопирована!\n\nОтправьте её другу:\n\n' + url + '\n\nОн подключится в эту же комнату!');
-      }).catch(() => {
-        prompt('Скопируйте ссылку:', url);
+        alert('✅ Ссылка скопирована!\n\n' + url);
       });
     }
 
@@ -632,46 +522,9 @@
       
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
-        localStream = null;
       }
       
-      document.getElementById('videosContainer').innerHTML = '';
-      document.getElementById('videoContainer').classList.add('hidden');
-      document.getElementById('loginForm').classList.remove('hidden');
-      document.getElementById('debug').innerHTML = '';
-      
-      userName = null;
-    }
-
-    function log(msg, type = 'info') {
-      const debug = document.getElementById('debug');
-      const div = document.createElement('div');
-      
-      const icons = {
-        'info': 'ℹ️',
-        'success': '✅',
-        'error': '❌',
-        'warning': '⚠️',
-        'audio': '🔊',
-        'video': '📹'
-      };
-      
-      div.textContent = `${icons[type] || 'ℹ️'} ${msg}`;
-      debug.appendChild(div);
-      debug.scrollTop = debug.scrollHeight;
-      console.log(msg);
-    }
-
-    function setStatus(msg, type = 'info') {
-      const status = document.getElementById('status');
-      status.textContent = msg;
-      status.className = type;
-    }
-
-    // Автозаполнение имени из URL
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('name')) {
-      document.getElementById('userName').value = params.get('name');
+      location.reload();
     }
   </script>
 </body>
