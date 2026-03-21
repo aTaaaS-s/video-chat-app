@@ -1,6 +1,5 @@
 let socket;
 let localStream;
-let peer;
 let peers = new Map();
 let currentRoomId = null;
 let currentUserName = null;
@@ -12,40 +11,67 @@ const videoGrid = document.getElementById('videoGrid');
 const currentRoomIdSpan = document.getElementById('currentRoomId');
 const participantCountSpan = document.getElementById('participantCount');
 
-// Инициализация при загрузке
+// Инициализация
 window.onload = () => {
-    socket = io();
+    socket = io({
+        transports: ['websocket', 'polling']
+    });
     setupSocketListeners();
 };
 
 function setupSocketListeners() {
+    socket.on('connect', () => {
+        console.log('Connected to server, socket ID:', socket.id);
+    });
+    
     socket.on('room-created', (roomId) => {
+        console.log('Room created:', roomId);
         currentRoomId = roomId;
-        joinVideoRoom();
+        currentRoomIdSpan.textContent = currentRoomId;
+        loginScreen.style.display = 'none';
+        chatScreen.style.display = 'block';
+        startLocalStream();
     });
     
     socket.on('room-joined', (data) => {
+        console.log('Joined room:', data.roomId, 'Participants:', data.participants);
         currentRoomId = data.roomId;
         currentRoomIdSpan.textContent = currentRoomId;
+        loginScreen.style.display = 'none';
+        chatScreen.style.display = 'block';
         
+        // Добавляем существующих участников
         data.participants.forEach(participant => {
             if (participant.id !== socket.id) {
+                console.log('Adding existing participant:', participant.name);
                 addRemoteVideo(participant.id, participant.name);
             }
         });
         
-        joinVideoRoom();
+        startLocalStream();
+    });
+    
+    socket.on('participants-list', (participants) => {
+        console.log('Participants list:', participants);
+        participants.forEach(participant => {
+            if (participant.id !== socket.id) {
+                addRemoteVideo(participant.id, participant.name);
+            }
+        });
     });
     
     socket.on('user-joined', (data) => {
+        console.log('User joined:', data.userName, data.userId);
         addRemoteVideo(data.userId, data.userName);
     });
     
     socket.on('user-left', (data) => {
+        console.log('User left:', data.userName, data.userId);
         removeRemoteVideo(data.userId);
     });
     
     socket.on('offer', async (data) => {
+        console.log('Received offer from:', data.fromName);
         if (!peers.has(data.from)) {
             const peerConnection = createPeerConnection(data.from, data.fromName);
             peers.set(data.from, { peer: peerConnection, name: data.fromName });
@@ -57,6 +83,7 @@ function setupSocketListeners() {
     });
     
     socket.on('answer', async (data) => {
+        console.log('Received answer from:', data.from);
         const peerConnection = peers.get(data.from)?.peer;
         if (peerConnection) {
             await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
@@ -64,21 +91,23 @@ function setupSocketListeners() {
     });
     
     socket.on('ice-candidate', (data) => {
+        console.log('Received ICE candidate from:', data.from);
         const peerConnection = peers.get(data.from)?.peer;
         if (peerConnection) {
             peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
         }
     });
+    
+    socket.on('error', (msg) => {
+        console.error('Socket error:', msg);
+        alert(msg);
+    });
 }
 
-async function joinVideoRoom() {
+async function startLocalStream() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         addLocalVideo();
-        
-        loginScreen.style.display = 'none';
-        chatScreen.style.display = 'block';
-        
         updateParticipantCount();
     } catch (error) {
         console.error('Error accessing media devices:', error);
@@ -107,19 +136,14 @@ function addLocalVideo() {
 }
 
 function createPeerConnection(targetUserId, userName) {
-    // Улучшенная конфигурация ICE серверов для работы через интернет
     const peerConnection = new RTCPeerConnection({
         iceServers: [
-            // Google STUN серверы
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
-            // Публичный STUN сервер
-            { urls: 'stun:stun.stunprotocol.org:3478' }
-        ],
-        iceCandidatePoolSize: 10
+            { urls: 'stun:stun4.l.google.com:19302' }
+        ]
     });
     
     // Добавляем локальные треки
@@ -129,9 +153,9 @@ function createPeerConnection(targetUserId, userName) {
         });
     }
     
-    // Обработка ICE кандидатов
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
+            console.log('Sending ICE candidate to:', targetUserId);
             socket.emit('ice-candidate', {
                 target: targetUserId,
                 candidate: event.candidate
@@ -139,8 +163,8 @@ function createPeerConnection(targetUserId, userName) {
         }
     };
     
-    // Обработка входящих потоков
     peerConnection.ontrack = (event) => {
+        console.log('Received remote track from:', userName);
         const container = document.getElementById(`video-${targetUserId}`);
         if (container) {
             const video = container.querySelector('video');
@@ -152,9 +176,8 @@ function createPeerConnection(targetUserId, userName) {
         }
     };
     
-    // Обработка ошибок ICE
     peerConnection.oniceconnectionstatechange = () => {
-        console.log(`ICE connection state for ${userName}: ${peerConnection.iceConnectionState}`);
+        console.log(`ICE state for ${userName}: ${peerConnection.iceConnectionState}`);
     };
     
     return peerConnection;
@@ -162,6 +185,9 @@ function createPeerConnection(targetUserId, userName) {
 
 function addRemoteVideo(userId, userName) {
     if (userId === socket.id) return;
+    if (document.getElementById(`video-${userId}`)) return;
+    
+    console.log('Adding remote video for:', userName);
     
     const container = document.createElement('div');
     container.className = 'video-container';
@@ -179,7 +205,7 @@ function addRemoteVideo(userId, userName) {
     container.appendChild(username);
     videoGrid.appendChild(container);
     
-    // Создаем peer connection для этого пользователя
+    // Создаем peer connection
     const peerConnection = createPeerConnection(userId, userName);
     peers.set(userId, { peer: peerConnection, name: userName });
     
@@ -187,6 +213,7 @@ function addRemoteVideo(userId, userName) {
     peerConnection.createOffer()
         .then(offer => peerConnection.setLocalDescription(offer))
         .then(() => {
+            console.log('Sending offer to:', userName);
             socket.emit('offer', {
                 target: userId,
                 offer: peerConnection.localDescription
@@ -203,9 +230,9 @@ function removeRemoteVideo(userId) {
         container.remove();
     }
     
-    const peerConnection = peers.get(userId)?.peer;
-    if (peerConnection) {
-        peerConnection.close();
+    const peerData = peers.get(userId);
+    if (peerData) {
+        peerData.peer.close();
         peers.delete(userId);
     }
     
@@ -225,6 +252,7 @@ function createRoom() {
     }
     currentUserName = userName;
     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    console.log('Creating room:', roomId);
     socket.emit('create-room', roomId, userName);
 }
 
@@ -242,6 +270,7 @@ function joinRoom() {
     }
     
     currentUserName = userName;
+    console.log('Joining room:', roomId);
     socket.emit('join-room', roomId, userName);
 }
 
@@ -250,7 +279,7 @@ function leaveRoom() {
         localStream.getTracks().forEach(track => track.stop());
     }
     
-    peers.forEach((value, key) => {
+    peers.forEach((value) => {
         value.peer.close();
     });
     peers.clear();
@@ -261,16 +290,19 @@ function leaveRoom() {
     
     document.getElementById('userName').value = '';
     document.getElementById('roomId').value = '';
+    
+    currentRoomId = null;
 }
 
 function copyRoomLink() {
-    const link = `${window.location.href}?room=${currentRoomId}`;
+    if (!currentRoomId) return;
+    const link = `${window.location.origin}?room=${currentRoomId}`;
     navigator.clipboard.writeText(link);
-    alert('Room link copied to clipboard!');
+    alert('Room link copied!');
 }
 
 function toggleAudio() {
-    const audioTrack = localStream.getAudioTracks()[0];
+    const audioTrack = localStream?.getAudioTracks()[0];
     if (audioTrack) {
         audioTrack.enabled = !audioTrack.enabled;
         const btn = document.getElementById('audioBtn');
@@ -279,7 +311,7 @@ function toggleAudio() {
 }
 
 function toggleVideo() {
-    const videoTrack = localStream.getVideoTracks()[0];
+    const videoTrack = localStream?.getVideoTracks()[0];
     if (videoTrack) {
         videoTrack.enabled = !videoTrack.enabled;
         const btn = document.getElementById('videoBtn');
@@ -290,7 +322,6 @@ function toggleVideo() {
 async function shareScreen() {
     try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        
         const videoTrack = screenStream.getVideoTracks()[0];
         const oldVideoTrack = localStream.getVideoTracks()[0];
         
@@ -298,15 +329,11 @@ async function shareScreen() {
         localStream.addTrack(videoTrack);
         
         const localVideo = document.querySelector(`#video-${socket.id} video`);
-        if (localVideo) {
-            localVideo.srcObject = localStream;
-        }
+        if (localVideo) localVideo.srcObject = localStream;
         
-        peers.forEach((value, key) => {
-            const sender = value.peer.getSenders().find(s => s.track && s.track.kind === 'video');
-            if (sender) {
-                sender.replaceTrack(videoTrack);
-            }
+        peers.forEach((value) => {
+            const sender = value.peer.getSenders().find(s => s.track?.kind === 'video');
+            if (sender) sender.replaceTrack(videoTrack);
         });
         
         videoTrack.onended = () => {
@@ -315,18 +342,10 @@ async function shareScreen() {
                     const newVideoTrack = stream.getVideoTracks()[0];
                     localStream.removeTrack(videoTrack);
                     localStream.addTrack(newVideoTrack);
-                    
-                    peers.forEach((value, key) => {
-                        const sender = value.peer.getSenders().find(s => s.track && s.track.kind === 'video');
-                        if (sender) {
-                            sender.replaceTrack(newVideoTrack);
-                        }
+                    peers.forEach((value) => {
+                        const sender = value.peer.getSenders().find(s => s.track?.kind === 'video');
+                        if (sender) sender.replaceTrack(newVideoTrack);
                     });
-                    
-                    const localVideo = document.querySelector(`#video-${socket.id} video`);
-                    if (localVideo) {
-                        localVideo.srcObject = localStream;
-                    }
                 });
         };
     } catch (error) {
@@ -334,7 +353,7 @@ async function shareScreen() {
     }
 }
 
-// Обработка ссылки с параметром комнаты
+// Автоматическое подключение по ссылке с room параметром
 const urlParams = new URLSearchParams(window.location.search);
 const roomFromUrl = urlParams.get('room');
 if (roomFromUrl) {
