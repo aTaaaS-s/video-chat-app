@@ -2,11 +2,14 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Video Chat</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; background: #1a1a2e; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+        }
         
         .login {
             display: flex;
@@ -48,95 +51,40 @@
         .chat {
             display: none;
             height: 100vh;
-            display: flex;
             flex-direction: column;
         }
         
         .header {
             background: white;
-            padding: 15px;
+            padding: 12px 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 10px;
+            z-index: 10;
         }
         
         .header h2 { font-size: 16px; color: #333; }
         .header button {
-            padding: 8px 15px;
+            padding: 6px 12px;
             background: #667eea;
             color: white;
             border: none;
             border-radius: 6px;
             cursor: pointer;
+            font-size: 13px;
         }
         .leave { background: #e74c3c !important; }
         
-        .info {
-            background: #f0f2f5;
-            padding: 8px 15px;
-            font-size: 14px;
-            color: #666;
-        }
-        
-        .video-grid {
+        #jitsi-container {
             flex: 1;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 15px;
-            padding: 15px;
-            background: #f0f2f5;
-            overflow-y: auto;
-        }
-        
-        .video-container {
-            position: relative;
             background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            aspect-ratio: 4/3;
-        }
-        
-        .video-container video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .video-container .name {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.6);
-            color: white;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 12px;
-        }
-        
-        .controls {
-            background: white;
-            padding: 15px;
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            border-top: 1px solid #ddd;
-        }
-        
-        .controls button {
-            padding: 10px 20px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 25px;
-            cursor: pointer;
-            font-size: 14px;
         }
         
         @media (max-width: 600px) {
-            .video-grid { grid-template-columns: 1fr; }
-            .controls button { padding: 8px 15px; font-size: 12px; }
+            .header h2 { font-size: 12px; }
+            .header button { padding: 5px 10px; font-size: 11px; }
         }
     </style>
 </head>
@@ -145,241 +93,92 @@
         <div class="login-card">
             <h1>🎥 Video Chat</h1>
             <input type="text" id="nameInput" placeholder="Your name" autocomplete="off">
-            <button onclick="join()">Join Chat</button>
+            <button onclick="startCall()">Start Call</button>
         </div>
     </div>
     
     <div class="chat" id="chat">
         <div class="header">
-            <h2>Room: Main Room</h2>
+            <h2>Room: <span id="roomName">main-room</span></h2>
             <button onclick="copyLink()">📋 Copy Link</button>
-            <button onclick="leave()" class="leave">🚪 Leave</button>
+            <button onclick="endCall()" class="leave">🚪 Leave</button>
         </div>
-        <div class="info">👥 Participants: <span id="count">1</span></div>
-        <div class="video-grid" id="videoGrid"></div>
-        <div class="controls">
-            <button onclick="toggleMic()" id="micBtn">🎤 Mute</button>
-            <button onclick="toggleCam()" id="camBtn">📹 Stop</button>
-        </div>
+        <div id="jitsi-container"></div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://meet.jit.si/external_api.js"></script>
     <script>
-        let socket;
-        let localStream;
-        let peers = {};
-        let myId;
-        let myName;
+        let jitsiApi;
+        let roomId = 'main-room-' + Math.random().toString(36).substring(2, 8);
         
-        const loginDiv = document.getElementById('login');
-        const chatDiv = document.getElementById('chat');
-        const videoGrid = document.getElementById('videoGrid');
-        const countSpan = document.getElementById('count');
-        
-        async function join() {
-            myName = document.getElementById('nameInput').value.trim();
-            if (!myName) {
+        function startCall() {
+            const userName = document.getElementById('nameInput').value.trim();
+            if (!userName) {
                 alert('Enter your name');
                 return;
             }
             
-            loginDiv.style.display = 'none';
-            chatDiv.style.display = 'flex';
+            document.getElementById('login').style.display = 'none';
+            document.getElementById('chat').style.display = 'flex';
+            document.getElementById('roomName').textContent = roomId;
             
-            // Получаем доступ к камере и микрофону
-            try {
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                addLocalVideo();
-            } catch(e) {
-                alert('Need camera and microphone access');
-                return;
-            }
-            
-            // Подключаемся к серверу
-            socket = io();
-            
-            socket.on('connect', () => {
-                myId = socket.id;
-                socket.emit('join', myName);
-            });
-            
-            socket.on('room-data', (data) => {
-                console.log('Room data:', data);
-                // Добавляем существующих участников
-                data.participants.forEach(p => {
-                    if (p.id !== myId) {
-                        addRemote(p.id, p.name);
-                    }
-                });
-                updateCount();
-            });
-            
-            socket.on('user-joined', (data) => {
-                console.log('User joined:', data.userName);
-                addRemote(data.userId, data.userName);
-            });
-            
-            socket.on('user-left', (data) => {
-                console.log('User left:', data.userName);
-                removeRemote(data.userId);
-            });
-            
-            socket.on('signal', async (data) => {
-                console.log('Signal from:', data.fromName);
-                if (!peers[data.from]) {
-                    peers[data.from] = createPeer(data.from);
+            const domain = 'meet.jit.si';
+            const options = {
+                roomName: roomId,
+                width: '100%',
+                height: '100%',
+                parentNode: document.querySelector('#jitsi-container'),
+                userInfo: {
+                    displayName: userName
+                },
+                configOverwrite: {
+                    startWithAudioMuted: false,
+                    startWithVideoMuted: false,
+                    prejoinPageEnabled: false,
+                    disableDeepLinking: true
+                },
+                interfaceConfigOverwrite: {
+                    TOOLBAR_BUTTONS: [
+                        'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
+                        'fodeviceselection', 'hangup', 'profile', 'chat', 'recording',
+                        'livestreaming', 'etherpad', 'sharedvideo', 'settings', 'raisehand',
+                        'videoquality', 'filmstrip', 'invite', 'feedback', 'stats', 'shortcuts',
+                        'tileview', 'videobackgroundblur', 'download', 'help', 'mute-everyone', 'security'
+                    ]
                 }
-                await peers[data.from].signal(data.signal);
+            };
+            
+            jitsiApi = new JitsiMeetExternalAPI(domain, options);
+            
+            jitsiApi.addEventListener('videoConferenceJoined', () => {
+                console.log('Joined conference');
             });
         }
         
-        function createPeer(targetId) {
-            const peer = new SimplePeer({
-                initiator: true,
-                trickle: true,
-                stream: localStream
-            });
-            
-            peer.on('signal', (signal) => {
-                socket.emit('signal', { target: targetId, signal });
-            });
-            
-            peer.on('stream', (remoteStream) => {
-                console.log('Got remote stream from:', targetId);
-                const container = document.getElementById(`video-${targetId}`);
-                if (container) {
-                    const video = container.querySelector('video');
-                    if (video) {
-                        video.srcObject = remoteStream;
-                        video.play();
-                    }
-                }
-            });
-            
-            peer.on('error', (err) => {
-                console.error('Peer error:', err);
-            });
-            
-            return peer;
-        }
-        
-        function addRemote(userId, userName) {
-            if (userId === myId) return;
-            if (document.getElementById(`video-${userId}`)) return;
-            
-            console.log('Adding remote:', userName);
-            
-            const container = document.createElement('div');
-            container.className = 'video-container';
-            container.id = `video-${userId}`;
-            
-            const video = document.createElement('video');
-            video.autoplay = true;
-            video.playsInline = true;
-            
-            const nameDiv = document.createElement('div');
-            nameDiv.className = 'name';
-            nameDiv.textContent = userName;
-            
-            container.appendChild(video);
-            container.appendChild(nameDiv);
-            videoGrid.appendChild(container);
-            
-            // Создаем peer (не инициатор)
-            const peer = new SimplePeer({
-                initiator: false,
-                trickle: true,
-                stream: localStream
-            });
-            
-            peer.on('signal', (signal) => {
-                socket.emit('signal', { target: userId, signal });
-            });
-            
-            peer.on('stream', (remoteStream) => {
-                console.log('Got remote stream from:', userName);
-                video.srcObject = remoteStream;
-            });
-            
-            peer.on('error', (err) => {
-                console.error('Peer error:', err);
-            });
-            
-            peers[userId] = peer;
-            updateCount();
-        }
-        
-        function removeRemote(userId) {
-            const container = document.getElementById(`video-${userId}`);
-            if (container) container.remove();
-            
-            if (peers[userId]) {
-                peers[userId].destroy();
-                delete peers[userId];
+        function endCall() {
+            if (jitsiApi) {
+                jitsiApi.dispose();
             }
-            
-            updateCount();
-        }
-        
-        function addLocalVideo() {
-            const container = document.createElement('div');
-            container.className = 'video-container';
-            container.id = `video-${myId}`;
-            
-            const video = document.createElement('video');
-            video.srcObject = localStream;
-            video.autoplay = true;
-            video.muted = true;
-            video.playsInline = true;
-            
-            const nameDiv = document.createElement('div');
-            nameDiv.className = 'name';
-            nameDiv.textContent = `${myName} (You)`;
-            
-            container.appendChild(video);
-            container.appendChild(nameDiv);
-            videoGrid.appendChild(container);
-        }
-        
-        function updateCount() {
-            const count = document.querySelectorAll('.video-container').length;
-            countSpan.textContent = count;
-        }
-        
-        function toggleMic() {
-            const track = localStream?.getAudioTracks()[0];
-            if (track) {
-                track.enabled = !track.enabled;
-                document.getElementById('micBtn').textContent = track.enabled ? '🎤 Mute' : '🔇 Unmute';
-            }
-        }
-        
-        function toggleCam() {
-            const track = localStream?.getVideoTracks()[0];
-            if (track) {
-                track.enabled = !track.enabled;
-                document.getElementById('camBtn').textContent = track.enabled ? '📹 Stop' : '📹 Start';
-            }
-        }
-        
-        function leave() {
-            if (localStream) localStream.getTracks().forEach(t => t.stop());
-            Object.values(peers).forEach(p => p.destroy());
-            peers = {};
-            videoGrid.innerHTML = '';
-            loginDiv.style.display = 'flex';
-            chatDiv.style.display = 'none';
+            document.getElementById('login').style.display = 'flex';
+            document.getElementById('chat').style.display = 'none';
             document.getElementById('nameInput').value = '';
-            if (socket) socket.disconnect();
+            // Создаем новую комнату для следующего звонка
+            roomId = 'main-room-' + Math.random().toString(36).substring(2, 8);
         }
         
         function copyLink() {
-            navigator.clipboard.writeText(window.location.href);
-            alert('Link copied!');
+            const link = window.location.origin + '?room=' + roomId;
+            navigator.clipboard.writeText(link);
+            alert('Link copied! Share it with friends.');
+        }
+        
+        // Автоматический вход, если есть параметр room в URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomFromUrl = urlParams.get('room');
+        if (roomFromUrl) {
+            roomId = roomFromUrl;
+            document.getElementById('nameInput').placeholder = 'Enter your name to join';
         }
     </script>
-    
-    <!-- SimplePeer библиотека -->
-    <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
 </body>
 </html>
