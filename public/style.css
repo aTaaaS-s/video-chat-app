@@ -1,223 +1,218 @@
 * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  min-height: 100vh;
+  color: #fff;
 }
 
-.container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 20px;
+.screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
-/* Login Screen */
-.login-screen {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
+/* Экран входа */
+#loginScreen {
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
 }
 
-.login-card {
-    background: white;
-    padding: 40px;
-    border-radius: 20px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    text-align: center;
-    width: 100%;
-    max-width: 400px;
+.card {
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+  padding: 40px 30px;
+  border-radius: 20px;
+  text-align: center;
+  width: 100%;
+  max-width: 400px;
+  border: 1px solid rgba(255,255,255,0.2);
 }
 
-.login-card h1 {
-    margin-bottom: 30px;
-    color: #333;
+.card h1 {
+  margin-bottom: 10px;
+  font-size: 28px;
 }
 
-.input-group {
-    margin-bottom: 20px;
+.card p {
+  color: #aaa;
+  margin-bottom: 25px;
+  font-size: 14px;
 }
 
-.input-group input {
-    width: 100%;
-    padding: 12px;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    font-size: 16px;
-    transition: border-color 0.3s;
+.card input {
+  width: 100%;
+  padding: 14px;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-radius: 10px;
+  font-size: 16px;
+  margin-bottom: 15px;
+  background: rgba(255,255,255,0.1);
+  color: #fff;
 }
 
-.input-group input:focus {
-    outline: none;
-    border-color: #667eea;
+.card input::placeholder {
+  color: #888;
 }
 
-.button-group {
-    display: flex;
-    gap: 10px;
+.card input:focus {
+  outline: none;
+  border-color: #667eea;
 }
 
-.button-group button {
-    flex: 1;
-    padding: 12px;
-    background: #667eea;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
-    cursor: pointer;
-    transition: transform 0.2s, background 0.2s;
+.card button {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s;
 }
 
-.button-group button:hover {
-    background: #5a67d8;
-    transform: translateY(-2px);
+.card button:hover {
+  transform: translateY(-2px);
 }
 
-/* Chat Screen */
-.chat-screen {
-    background: white;
-    border-radius: 20px;
-    overflow: hidden;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+/* Экран чата */
+#chatScreen {
+  background: #0a0a0f;
 }
 
 .header {
-    background: white;
-    padding: 20px;
-    border-bottom: 1px solid #e0e0e0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
+  background: rgba(0,0,0,0.8);
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  backdrop-filter: blur(10px);
 }
 
-.header h2 {
-    color: #333;
+.room-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
 }
 
-.header button {
-    padding: 8px 16px;
-    background: #667eea;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background 0.2s;
+.room-info strong {
+  color: #667eea;
 }
 
-.header button:hover {
-    background: #5a67d8;
+.btn-small {
+  padding: 5px 10px;
+  background: rgba(255,255,255,0.2);
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
 }
 
-.leave-btn {
-    background: #e53e3e !important;
+.btn-leave {
+  padding: 8px 16px;
+  background: #e53e3e;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
 }
 
-.leave-btn:hover {
-    background: #c53030 !important;
+/* Видео контейнер */
+.videos-container {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 10px;
+  padding: 10px;
+  overflow-y: auto;
 }
 
-.participants-info {
-    padding: 10px 20px;
-    background: #f7fafc;
-    color: #666;
-    font-size: 14px;
+.video-wrapper {
+  position: relative;
+  background: #1a1a2e;
+  border-radius: 10px;
+  overflow: hidden;
+  aspect-ratio: 16/9;
 }
 
-.video-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-    padding: 20px;
-    min-height: 500px;
-    background: #f7fafc;
+.video-wrapper video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-.video-container {
-    position: relative;
-    background: #000;
-    border-radius: 12px;
-    overflow: hidden;
-    aspect-ratio: 4/3;
+.video-wrapper .user-name {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  background: rgba(0,0,0,0.7);
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 12px;
 }
 
-.video-container video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+.video-wrapper.mirror video {
+  transform: scaleX(-1);
 }
 
-.video-container .username {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    background: rgba(0,0,0,0.7);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    z-index: 1;
-}
-
-.video-container .audio-status {
-    position: absolute;
-    bottom: 10px;
-    right: 10px;
-    background: rgba(0,0,0,0.7);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-}
-
+/* Контролы */
 .controls {
-    padding: 20px;
-    background: white;
-    border-top: 1px solid #e0e0e0;
-    display: flex;
-    justify-content: center;
-    gap: 15px;
+  background: rgba(0,0,0,0.8);
+  padding: 15px;
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  backdrop-filter: blur(10px);
 }
 
 .controls button {
-    padding: 12px 24px;
-    background: #667eea;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
-    cursor: pointer;
-    transition: all 0.2s;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  transition: all 0.2s;
 }
 
 .controls button:hover {
-    transform: translateY(-2px);
-    background: #5a67d8;
+  background: rgba(255,255,255,0.3);
 }
 
-.controls button:active {
-    transform: translateY(0);
+.controls button.active {
+  background: #e53e3e;
 }
 
-@media (max-width: 768px) {
-    .video-grid {
-        grid-template-columns: 1fr;
-    }
-    
-    .controls button {
-        padding: 10px 20px;
-        font-size: 14px;
-    }
-    
-    .header {
-        flex-direction: column;
-        text-align: center;
-    }
+.btn-hangup {
+  background: #e53e3e !important;
+}
+
+@media (max-width: 600px) {
+  .videos-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .header {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .controls button {
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+  }
 }
