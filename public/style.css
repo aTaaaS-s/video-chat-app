@@ -1,148 +1,24 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  min-height: 100vh;
-  color: #fff;
-}
-
-.screen {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-/* Экран входа */
-#loginScreen {
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-}
-
-.card {
-  background: rgba(255,255,255,0.1);
-  backdrop-filter: blur(10px);
-  padding: 40px 30px;
-  border-radius: 20px;
-  text-align: center;
-  width: 100%;
-  max-width: 400px;
-  border: 1px solid rgba(255,255,255,0.2);
-}
-
-.card h1 {
-  margin-bottom: 10px;
-  font-size: 28px;
-}
-
-.card p {
-  color: #aaa;
-  margin-bottom: 25px;
-  font-size: 14px;
-}
-
-.card input {
-  width: 100%;
-  padding: 14px;
-  border: 2px solid rgba(255,255,255,0.2);
-  border-radius: 10px;
-  font-size: 16px;
-  margin-bottom: 15px;
-  background: rgba(255,255,255,0.1);
-  color: #fff;
-}
-
-.card input::placeholder {
-  color: #888;
-}
-
-.card input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.card button {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-size: 18px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.card button:hover {
-  transform: translateY(-2px);
-}
-
-/* Экран чата */
-#chatScreen {
-  background: #0a0a0f;
-}
-
-.header {
-  background: rgba(0,0,0,0.8);
-  padding: 12px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  backdrop-filter: blur(10px);
-}
-
-.room-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-}
-
-.room-info strong {
-  color: #667eea;
-}
-
-.btn-small {
-  padding: 5px 10px;
-  background: rgba(255,255,255,0.2);
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.btn-leave {
-  padding: 8px 16px;
-  background: #e53e3e;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-/* Видео контейнер */
+/* Замени секцию .videos-container */
 .videos-container {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 10px;
   padding: 10px;
   overflow-y: auto;
+  max-height: calc(100vh - 150px);
 }
 
+/* Добавь max-width для видео */
 .video-wrapper {
   position: relative;
   background: #1a1a2e;
   border-radius: 10px;
   overflow: hidden;
   aspect-ratio: 16/9;
+  max-width: 100%;
+  max-height: 400px;
+  margin: 0 auto;
 }
 
 .video-wrapper video {
@@ -151,68 +27,14 @@ body {
   object-fit: cover;
 }
 
-.video-wrapper .user-name {
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  background: rgba(0,0,0,0.7);
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-size: 12px;
-}
-
-.video-wrapper.mirror video {
-  transform: scaleX(-1);
-}
-
-/* Контролы */
-.controls {
-  background: rgba(0,0,0,0.8);
-  padding: 15px;
-  display: flex;
-  justify-content: center;
-  gap: 15px;
-  backdrop-filter: blur(10px);
-}
-
-.controls button {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  background: rgba(255,255,255,0.2);
-  color: #fff;
-  transition: all 0.2s;
-}
-
-.controls button:hover {
-  background: rgba(255,255,255,0.3);
-}
-
-.controls button.active {
-  background: #e53e3e;
-}
-
-.btn-hangup {
-  background: #e53e3e !important;
-}
-
+/* Адаптив для мобильных */
 @media (max-width: 600px) {
   .videos-container {
     grid-template-columns: 1fr;
+    padding: 5px;
   }
   
-  .header {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
-  }
-  
-  .controls button {
-    width: 50px;
-    height: 50px;
-    font-size: 20px;
+  .video-wrapper {
+    max-height: 250px;
   }
 }
