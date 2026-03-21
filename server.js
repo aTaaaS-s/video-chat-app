@@ -9,81 +9,94 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
-  }
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true
 });
 
 app.use(cors());
 app.use(express.static('public'));
 
-// Хранилище комнат
+// РҐСЂР°РЅРёР»РёС‰Рµ РєРѕРјРЅР°С‚ Рё РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№
 const rooms = new Map();
+const users = new Map();
 
 io.on('connection', (socket) => {
-  console.log('New client connected:', socket.id);
+  console.log('Client connected:', socket.id);
 
-  // Создание комнаты
+  // РЎРѕР·РґР°РЅРёРµ РєРѕРјРЅР°С‚С‹
   socket.on('create-room', (roomId, userName) => {
+    console.log(`Creating room: ${roomId} by ${userName}`);
+    
     socket.join(roomId);
     
     if (!rooms.has(roomId)) {
-      rooms.set(roomId, new Set());
+      rooms.set(roomId, new Map());
     }
-    rooms.get(roomId).add(socket.id);
     
-    // Сохраняем информацию о пользователе
-    socket.roomId = roomId;
-    socket.userName = userName;
+    // РЎРѕС…СЂР°РЅСЏРµРј РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
+    rooms.get(roomId).set(socket.id, { id: socket.id, name: userName });
+    users.set(socket.id, { roomId, name: userName });
     
-    console.log(`Room ${roomId} created by ${userName}`);
     socket.emit('room-created', roomId);
     
-    // Отправляем список участников
-    const participants = Array.from(rooms.get(roomId)).map(id => ({
-      id: id,
-      name: id === socket.id ? userName : `User_${id.slice(-4)}`
+    // РћС‚РїСЂР°РІР»СЏРµРј СЃРїРёСЃРѕРє СѓС‡Р°СЃС‚РЅРёРєРѕРІ
+    const participants = Array.from(rooms.get(roomId).values()).map(p => ({
+      id: p.id,
+      name: p.name
     }));
     socket.emit('participants-list', participants);
+    
+    console.log(`Room ${roomId} created. Participants: ${participants.length}`);
   });
 
-  // Присоединение к комнате
+  // РџСЂРёСЃРѕРµРґРёРЅРµРЅРёРµ Рє РєРѕРјРЅР°С‚Рµ
   socket.on('join-room', (roomId, userName) => {
+    console.log(`User ${userName} (${socket.id}) joining room: ${roomId}`);
+    
     if (!rooms.has(roomId)) {
       socket.emit('error', 'Room does not exist');
       return;
     }
     
     socket.join(roomId);
-    rooms.get(roomId).add(socket.id);
-    socket.roomId = roomId;
-    socket.userName = userName;
+    rooms.get(roomId).set(socket.id, { id: socket.id, name: userName });
+    users.set(socket.id, { roomId, name: userName });
     
-    console.log(`${userName} joined room ${roomId}`);
+    // РћС‚РїСЂР°РІР»СЏРµРј РЅРѕРІРѕРјСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ СЃРїРёСЃРѕРє РІСЃРµС… СѓС‡Р°СЃС‚РЅРёРєРѕРІ
+    const participants = Array.from(rooms.get(roomId).values()).map(p => ({
+      id: p.id,
+      name: p.name
+    }));
     
-    // Уведомляем всех в комнате о новом участнике
+    socket.emit('room-joined', { 
+      roomId, 
+      participants 
+    });
+    
+    // РЈРІРµРґРѕРјР»СЏРµРј РІСЃРµС… РѕСЃС‚Р°Р»СЊРЅС‹С… Рѕ РЅРѕРІРѕРј РїРѕР»СЊР·РѕРІР°С‚РµР»Рµ
     socket.to(roomId).emit('user-joined', {
       userId: socket.id,
       userName: userName
     });
     
-    // Отправляем новому участнику список всех пользователей
-    const participants = Array.from(rooms.get(roomId)).map(id => ({
-      id: id,
-      name: id === socket.id ? userName : getUserName(roomId, id)
-    }));
-    socket.emit('room-joined', { roomId, participants });
+    console.log(`User ${userName} joined room ${roomId}. Total: ${participants.length}`);
   });
   
-  // WebRTC сигналинг
+  // WebRTC СЃРёРіРЅР°Р»РёРЅРі
   socket.on('offer', (data) => {
+    console.log(`Offer from ${socket.id} to ${data.target}`);
     socket.to(data.target).emit('offer', {
       offer: data.offer,
       from: socket.id,
-      fromName: socket.userName
+      fromName: users.get(socket.id)?.name || 'Unknown'
     });
   });
   
   socket.on('answer', (data) => {
+    console.log(`Answer from ${socket.id} to ${data.target}`);
     socket.to(data.target).emit('answer', {
       answer: data.answer,
       from: socket.id
@@ -91,37 +104,41 @@ io.on('connection', (socket) => {
   });
   
   socket.on('ice-candidate', (data) => {
+    console.log(`ICE candidate from ${socket.id} to ${data.target}`);
     socket.to(data.target).emit('ice-candidate', {
       candidate: data.candidate,
       from: socket.id
     });
   });
   
-  // Отключение пользователя
+  // РћС‚РєР»СЋС‡РµРЅРёРµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ
   socket.on('disconnect', () => {
-    if (socket.roomId && rooms.has(socket.roomId)) {
-      rooms.get(socket.roomId).delete(socket.id);
-      
-      // Уведомляем остальных участников
-      socket.to(socket.roomId).emit('user-left', {
-        userId: socket.id,
-        userName: socket.userName
-      });
-      
-      // Удаляем комнату, если она пуста
-      if (rooms.get(socket.roomId).size === 0) {
-        rooms.delete(socket.roomId);
-      }
-    }
     console.log('Client disconnected:', socket.id);
+    
+    const userData = users.get(socket.id);
+    if (userData) {
+      const { roomId, name } = userData;
+      
+      if (rooms.has(roomId)) {
+        rooms.get(roomId).delete(socket.id);
+        
+        // РЈРІРµРґРѕРјР»СЏРµРј РѕСЃС‚Р°Р»СЊРЅС‹С… СѓС‡Р°СЃС‚РЅРёРєРѕРІ
+        socket.to(roomId).emit('user-left', {
+          userId: socket.id,
+          userName: name
+        });
+        
+        // РЈРґР°Р»СЏРµРј РєРѕРјРЅР°С‚Сѓ, РµСЃР»Рё РѕРЅР° РїСѓСЃС‚Р°
+        if (rooms.get(roomId).size === 0) {
+          rooms.delete(roomId);
+          console.log(`Room ${roomId} deleted (empty)`);
+        }
+      }
+      
+      users.delete(socket.id);
+    }
   });
 });
-
-// Вспомогательная функция для получения имени пользователя
-function getUserName(roomId, userId) {
-  // В реальном приложении здесь можно хранить соответствие userId -> userName
-  return `User_${userId.slice(-4)}`;
-}
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
