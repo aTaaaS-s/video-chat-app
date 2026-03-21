@@ -8,8 +8,11 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*",
-    methods: ["GET", "POST"]
-  }
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 const PORT = process.env.PORT || 3000;
@@ -23,7 +26,7 @@ app.get('/', (req, res) => {
 const rooms = {};
 
 io.on('connection', (socket) => {
-  console.log(`🔌 Подключился: ${socket.id}`);
+  console.log(`✅ Подключился: ${socket.id}`);
 
   socket.on('join-room', ({ roomId, userName }) => {
     const roomName = 'MAIN-ROOM';
@@ -38,27 +41,43 @@ io.on('connection', (socket) => {
     
     rooms[roomName].push({ id: socket.id, name: userName });
     
-    console.log(`📍 ${userName} (${socket.id}) в ${roomName}`);
+    console.log(` ${userName} (${socket.id}) в ${roomName}. Всего: ${rooms[roomName].length}`);
     
+    // Отправляем НОВОМУ пользователю список существующих
     const otherUsers = rooms[roomName].filter(u => u.id !== socket.id);
     socket.emit('room-users', otherUsers);
+    console.log(`  Отправлено room-users: ${otherUsers.length} пользователей`);
     
+    // Сообщаем ДРУГИМ о новом пользователе
     socket.to(roomName).emit('user-joined', { 
       id: socket.id, 
       name: userName 
     });
+    console.log(`  Отправлено user-joined другим пользователям`);
   });
 
+  // WebRTC сигнализация
   socket.on('offer', ({ targetId, offer }) => {
-    socket.to(targetId).emit('offer', { senderId: socket.id, offer });
+    console.log(`📤 Offer: ${socket.id} -> ${targetId}`);
+    socket.to(targetId).emit('offer', { 
+      senderId: socket.id, 
+      offer 
+    });
   });
 
   socket.on('answer', ({ targetId, answer }) => {
-    socket.to(targetId).emit('answer', { senderId: socket.id, answer });
+    console.log(`📤 Answer: ${socket.id} -> ${targetId}`);
+    socket.to(targetId).emit('answer', { 
+      senderId: socket.id, 
+      answer 
+    });
   });
 
   socket.on('ice-candidate', ({ targetId, candidate }) => {
-    socket.to(targetId).emit('ice-candidate', { senderId: socket.id, candidate });
+    socket.to(targetId).emit('ice-candidate', { 
+      senderId: socket.id, 
+      candidate 
+    });
   });
 
   socket.on('disconnect', () => {
@@ -66,6 +85,7 @@ io.on('connection', (socket) => {
     
     if (socket.roomId && rooms[socket.roomId]) {
       rooms[socket.roomId] = rooms[socket.roomId].filter(u => u.id !== socket.id);
+      
       socket.to(socket.roomId).emit('user-left', { id: socket.id });
       
       if (rooms[socket.roomId].length === 0) {
@@ -76,5 +96,6 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`✅ Сервер запущен на порту ${PORT}`);
+  console.log(`🚀 Сервер запущен на порту ${PORT}`);
+  console.log(`📍 Общая комната: MAIN-ROOM`);
 });
