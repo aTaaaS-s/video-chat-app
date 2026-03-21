@@ -2,37 +2,176 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Видеочат</title>
   <style>
-    body { font-family: Arial; margin: 0; padding: 20px; background: #1a1a2e; color: white; }
-    .container { max-width: 800px; margin: 0 auto; }
-    input { padding: 10px; margin: 5px; width: 200px; }
-    button { padding: 10px 20px; margin: 5px; cursor: pointer; }
-    #videoContainer { margin-top: 20px; }
-    video { width: 100%; max-width: 640px; border-radius: 10px; }
-    .hidden { display: none; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+      margin: 0; 
+      padding: 10px; 
+      background: #1a1a2e; 
+      color: white;
+      min-height: 100vh;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { margin-bottom: 20px; font-size: 24px; text-align: center; }
+    
+    .form-group { 
+      background: rgba(255,255,255,0.1); 
+      padding: 20px; 
+      border-radius: 10px; 
+      margin-bottom: 20px;
+    }
+    
+    input, select { 
+      padding: 12px; 
+      margin: 5px 0; 
+      width: 100%; 
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1);
+      color: white;
+      font-size: 16px;
+    }
+    
+    input::placeholder { color: #aaa; }
+    
+    button { 
+      padding: 12px 24px; 
+      margin: 5px; 
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      transition: transform 0.2s;
+    }
+    
+    button:active { transform: scale(0.95); }
+    
+    .btn-primary { 
+      background: linear-gradient(135deg, #667eea, #764ba2); 
+      color: white;
+      width: 100%;
+    }
+    
+    .btn-control { 
+      background: rgba(255,255,255,0.2); 
+      color: white;
+      flex: 1;
+      min-width: 100px;
+    }
+    
+    .btn-control.active { background: #e53e3e; }
+    .btn-control.success { background: #48bb78; }
+    
+    #videoContainer { 
+      margin-top: 20px; 
+      background: rgba(0,0,0,0.3);
+      padding: 20px;
+      border-radius: 10px;
+    }
+    
+    video { 
+      width: 100%; 
+      max-width: 640px; 
+      border-radius: 10px;
+      background: #000;
+      display: block;
+      margin: 0 auto;
+    }
+    
+    .controls { 
+      display: flex; 
+      gap: 10px; 
+      margin-top: 15px;
+      flex-wrap: wrap;
+    }
+    
+    #status { 
+      padding: 10px; 
+      background: rgba(255,255,255,0.1);
+      border-radius: 8px;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    
+    #status.error { background: rgba(229, 62, 62, 0.3); }
+    #status.success { background: rgba(72, 187, 120, 0.3); }
+    #status.warning { background: rgba(237, 137, 54, 0.3); }
+    
+    #debug { 
+      margin-top: 20px; 
+      background: #000; 
+      padding: 15px; 
+      border-radius: 8px;
+      font-size: 13px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+    }
+    
+    #debug div { 
+      padding: 3px 0; 
+      border-bottom: 1px solid #333;
+    }
+    
+    .device-info {
+      background: rgba(255,255,255,0.05);
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
+      font-size: 14px;
+    }
+    
+    .hidden { display: none !important; }
+    
+    @media (max-width: 600px) {
+      h1 { font-size: 20px; }
+      .controls { flex-direction: column; }
+      .btn-control { width: 100%; }
+      video { max-height: 400px; object-fit: contain; }
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>🎥 Простой видеочат</h1>
+    <h1>🎥 Видеочат</h1>
     
-    <div id="loginForm">
-      <input type="text" id="userName" placeholder="Ваше имя"><br>
-      <input type="text" id="roomId" placeholder="Комната"><br>
-      <button onclick="startVideo()">📹 Начать видео</button>
+    <div id="loginForm" class="form-group">
+      <input type="text" id="userName" placeholder="Ваше имя">
+      <input type="text" id="roomId" placeholder="Название комнаты">
+      
+      <div class="device-info" id="deviceInfo">
+        🔍 Поиск устройств...
+      </div>
+      
+      <button onclick="startVideo()" class="btn-primary">📹 Начать видеочат</button>
+      
+      <div style="margin-top: 15px; font-size: 13px; color: #aaa; text-align: center;">
+        💡 Для работы нужно разрешить доступ к камере и микрофону
+      </div>
     </div>
 
     <div id="videoContainer" class="hidden">
-      <h2 id="status">Статус: ...</h2>
+      <div id="status">Подключение...</div>
+      
       <video id="localVideo" autoplay playsinline muted></video>
-      <div>
-        <button onclick="toggleMic()">🎤 Микрофон</button>
-        <button onclick="toggleCam()">📷 Камера</button>
-        <button onclick="stopVideo()">❌ Стоп</button>
+      
+      <div class="controls">
+        <button id="btnMic" onclick="toggleMic()" class="btn-control success">
+          🎤 Микрофон ВКЛ
+        </button>
+        <button id="btnCam" onclick="toggleCam()" class="btn-control success">
+          📷 Камера ВКЛ
+        </button>
+        <button onclick="stopVideo()" class="btn-control">
+          ❌ Выйти
+        </button>
       </div>
-      <div id="debug" style="margin-top: 20px; background: #000; padding: 10px; font-size: 12px;"></div>
+      
+      <div id="debug"></div>
     </div>
   </div>
 
@@ -42,97 +181,280 @@
     let localStream = null;
     let micEnabled = true;
     let camEnabled = true;
+    let audioContext = null;
+    let analyser = null;
 
-    function log(msg) {
+    function log(msg, type = 'info') {
       const debug = document.getElementById('debug');
-      debug.innerHTML += '<br>' + msg;
+      const div = document.createElement('div');
+      
+      const icons = {
+        'info': 'ℹ️',
+        'success': '✅',
+        'error': '❌',
+        'warning': '⚠️',
+        'audio': '🔊',
+        'video': '📹'
+      };
+      
+      div.textContent = `${icons[type] || 'ℹ️'} ${msg}`;
+      debug.appendChild(div);
+      debug.scrollTop = debug.scrollHeight;
       console.log(msg);
     }
+
+    function setStatus(msg, type = 'info') {
+      const status = document.getElementById('status');
+      status.textContent = msg;
+      status.className = type;
+    }
+
+    // Проверяем устройства при загрузке
+    async function checkDevices() {
+      try {
+        // Сначала запрашиваем разрешения
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+        
+        // Получаем список устройств
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === 'audioinput');
+        const cams = devices.filter(d => d.kind === 'videoinput');
+        
+        const info = document.getElementById('deviceInfo');
+        info.innerHTML = `
+          <div>🎤 Микрофонов найдено: <strong>${mics.length}</strong></div>
+          <div>📹 Камер найдено: <strong>${cams.length}</strong></div>
+          ${mics.length > 0 ? `<div style="font-size: 12px; color: #888; margin-top: 5px;">${mics[0].label || 'Микрофон 1'}</div>` : ''}
+        `;
+        
+        if (mics.length === 0) {
+          log('⚠️ Микрофоны не найдены!', 'warning');
+        }
+      } catch (err) {
+        document.getElementById('deviceInfo').innerHTML = 
+          '<span style="color: #fc8181">⚠️ Нет доступа к устройствам</span>';
+      }
+    }
+
+    checkDevices();
 
     async function startVideo() {
       const name = document.getElementById('userName').value || 'Аноним';
       const room = document.getElementById('roomId').value || 'room1';
       
-      log('🚀 Запуск видео...');
-      document.getElementById('status').textContent = 'Запрос доступа...';
+      log('Запрос доступа к камере и микрофону...', 'info');
+      setStatus('Запрос разрешений...', 'warning');
 
       try {
+        // Проверяем поддержку
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Ваш браузер не поддерживает видеочаты');
+        }
+
+        // Запрашиваем с конкретными параметрами
         localStream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: true
+          video: { 
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user'
+          },
+          audio: { 
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: { ideal: 44100 }
+          }
         });
 
-        log('✅ Доступ получен!');
-        log('🎤 Аудио треков: ' + localStream.getAudioTracks().length);
-        log('📹 Видео треков: ' + localStream.getVideoTracks().length);
+        log('Доступ получен!', 'success');
+        
+        // Проверяем треки
+        const audioTracks = localStream.getAudioTracks();
+        const videoTracks = localStream.getVideoTracks();
+        
+        log(`Аудио треков: ${audioTracks.length}`, 'audio');
+        log(`Видео треков: ${videoTracks.length}`, 'video');
+        
+        if (audioTracks.length > 0) {
+          const audioTrack = audioTracks[0];
+          const settings = audioTrack.getSettings();
+          log(`Микрофон: ${audioTrack.label || 'Неизвестно'}`, 'audio');
+          log(`Sample rate: ${settings.sampleRate || 'N/A'} Hz`, 'audio');
+          log(`Echo cancellation: ${settings.echoCancellation ? 'ВКЛ' : 'ВЫКЛ'}`, 'audio');
+        } else {
+          log('НЕТ АУДИО ТРЕКА!', 'error');
+          setStatus('⚠️ Микрофон не найден! Проверьте разрешения', 'error');
+        }
+        
+        if (videoTracks.length > 0) {
+          log(`Камера: ${videoTracks[0].label || 'Неизвестно'}`, 'video');
+        }
 
+        // Показываем видео
         const video = document.getElementById('localVideo');
         video.srcObject = localStream;
+        
+        // Ждем загрузки видео
+        video.onloadedmetadata = () => {
+          log(`Видео загружено: ${video.videoWidth}x${video.videoHeight}`, 'video');
+          setStatus(`✅ Работает! Комната: ${room}`, 'success');
+          
+          // Запускаем проверку звука через 2 секунды
+          setTimeout(startAudioMonitoring, 2000);
+        };
 
         document.getElementById('loginForm').classList.add('hidden');
         document.getElementById('videoContainer').classList.remove('hidden');
-        document.getElementById('status').textContent = '✅ Работает! Комната: ' + room;
 
-        // Проверяем микрофон через 2 секунды
-        setTimeout(checkAudio, 2000);
+        // Подключаемся к комнате
+        socket.emit('join-room', { roomId: room, userName: name });
 
       } catch (err) {
-        log('❌ Ошибка: ' + err.message);
-        alert('Не удалось получить доступ:\n' + err.message);
+        log(`Ошибка: ${err.message}`, 'error');
+        setStatus('❌ Ошибка: ' + err.message, 'error');
+        
+        let helpMsg = '';
+        if (err.name === 'NotAllowedError') {
+          helpMsg = '\n\n💡 Вы запретили доступ. Разрешите в настройках браузера (нажмите на иконку замка слева от адреса)';
+        } else if (err.name === 'NotFoundError') {
+          helpMsg = '\n\n💡 Камера/микрофон не найдены. Подключите устройства.';
+        } else if (err.name === 'NotReadableError') {
+          helpMsg = '\n\n💡 Устройство уже используется другой программой. Закройте другие приложения.';
+        }
+        
+        alert('Не удалось получить доступ:\n' + err.message + helpMsg);
       }
     }
 
-    function checkAudio() {
+    function startAudioMonitoring() {
       const audioTrack = localStream?.getAudioTracks()[0];
+      
       if (!audioTrack) {
-        log('⚠️ АУДИО ТРЕК НЕ НАЙДЕН!');
+        log('Аудио трек отсутствует', 'error');
         return;
       }
 
-      // Создаем анализатор
-      const audioContext = new AudioContext();
-      const analyser = audioContext.createAnalyser();
-      const source = audioContext.createMediaStreamSource(localStream);
-      source.connect(analyser);
-      analyser.fftSize = 256;
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      
-      let checks = 0;
-      function checkLevel() {
-        analyser.getByteFrequencyData(dataArray);
-        const average = dataArray.reduce((a,b) => a+b) / dataArray.length;
-        
-        checks++;
-        log(`🔊 Уровень звука #${checks}: ${Math.round(average)}`);
-        
-        if (average > 10) {
-          log('✅ МИКРОФОН РАБОТАЕТ!');
-        }
-        
-        if (checks < 5 && micEnabled) {
-          setTimeout(checkLevel, 1000);
-        }
+      if (!audioTrack.enabled) {
+        log('Аудио трек выключен', 'warning');
+        return;
       }
-      
-      checkLevel();
+
+      try {
+        // Создаем AudioContext
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaStreamSource(localStream);
+        
+        source.connect(analyser);
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.8;
+        
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        log('Мониторинг звука запущен', 'audio');
+        
+        let checkCount = 0;
+        let maxLevel = 0;
+        
+        function checkLevel() {
+          if (!analyser || !micEnabled) {
+            return;
+          }
+          
+          analyser.getByteFrequencyData(dataArray);
+          
+          // Считаем средний уровень
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const average = sum / dataArray.length;
+          
+          // Находим пик
+          const peak = Math.max(...dataArray);
+          
+          checkCount++;
+          maxLevel = Math.max(maxLevel, average);
+          
+          if (checkCount <= 10) {
+            log(`Уровень #${checkCount}: ${Math.round(average)} (пик: ${peak})`, 'audio');
+            
+            if (average > 5) {
+              log('✅ МИКРОФОН РАБОТАЕТ!', 'success');
+              setStatus('✅ Всё работает! Говорите...', 'success');
+            }
+          }
+          
+          // Обновляем кнопку если есть звук
+          if (average > 10) {
+            document.getElementById('btnMic').style.background = '#48bb78';
+            setTimeout(() => {
+              if (micEnabled) {
+                document.getElementById('btnMic').style.background = '';
+              }
+            }, 200);
+          }
+          
+          if (checkCount < 10 && micEnabled) {
+            setTimeout(checkLevel, 1000);
+          } else if (checkCount >= 10 && maxLevel < 5) {
+            log('⚠️ Звук очень тихий или микрофон не работает', 'warning');
+            setStatus('⚠️ Микрофон не улавливает звук', 'warning');
+          }
+        }
+        
+        checkLevel();
+        
+      } catch (err) {
+        log(`Ошибка мониторинга: ${err.message}`, 'error');
+      }
     }
 
     function toggleMic() {
       const track = localStream?.getAudioTracks()[0];
-      if (track) {
-        micEnabled = !micEnabled;
-        track.enabled = micEnabled;
-        log(micEnabled ? '🎤 Микрофон ВКЛ' : '🔇 Микрофон ВЫКЛ');
+      const btn = document.getElementById('btnMic');
+      
+      if (!track) {
+        log('Аудио трек не найден', 'error');
+        return;
+      }
+      
+      micEnabled = !micEnabled;
+      track.enabled = micEnabled;
+      
+      if (micEnabled) {
+        btn.textContent = '🎤 Микрофон ВКЛ';
+        btn.className = 'btn-control success';
+        log('Микрофон включен', 'audio');
+        // Перезапускаем мониторинг
+        setTimeout(startAudioMonitoring, 1000);
+      } else {
+        btn.textContent = '🔇 Микрофон ВЫКЛ';
+        btn.className = 'btn-control active';
+        log('Микрофон выключен', 'audio');
       }
     }
 
     function toggleCam() {
       const track = localStream?.getVideoTracks()[0];
-      if (track) {
-        camEnabled = !camEnabled;
-        track.enabled = camEnabled;
-        log(camEnabled ? '📹 Камера ВКЛ' : '📵 Камера ВЫКЛ');
+      const btn = document.getElementById('btnCam');
+      
+      if (!track) {
+        log('Видео трек не найден', 'error');
+        return;
+      }
+      
+      camEnabled = !camEnabled;
+      track.enabled = camEnabled;
+      
+      if (camEnabled) {
+        btn.textContent = '📷 Камера ВКЛ';
+        btn.className = 'btn-control success';
+        log('Камера включена', 'video');
+      } else {
+        btn.textContent = '📵 Камера ВЫКЛ';
+        btn.className = 'btn-control active';
+        log('Камера выключена', 'video');
       }
     }
 
@@ -141,13 +463,20 @@
         localStream.getTracks().forEach(track => track.stop());
         localStream = null;
       }
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
       location.reload();
     }
 
-    // Автозаполнение комнаты из URL
+    // Автозаполнение
     const params = new URLSearchParams(window.location.search);
     if (params.get('room')) {
       document.getElementById('roomId').value = params.get('room');
+    }
+    if (params.get('name')) {
+      document.getElementById('userName').value = params.get('name');
     }
   </script>
 </body>
