@@ -1,102 +1,150 @@
 const socket = io();
 let localStream = null;
 let peerConnections = {};
-let iceBuffer = {};
 let userName = null;
-let usersMap = {}; // Храним имена пользователей
+let audioContext, analyser, dataArray;
 
 const rtcConfig = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:8080', username: 'openrelayproject', credential: 'openrelayproject' }
+    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' }
   ]
 };
 
 function log(msg) {
-  const debug = document.getElementById('debug');
   const div = document.createElement('div');
   div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-  debug.appendChild(div);
-  debug.scrollTop = debug.scrollHeight;
+  document.getElementById('log').appendChild(div);
+  document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
   console.log(msg);
 }
 
-function addVideo(stream, id, isLocal) {
-  if (document.getElementById(`video-${id}`)) {
-    log(`Видео ${id} уже есть`);
-    return;
-  }
+async function join() {
+  userName = document.getElementById('nameInput').value.trim() || 'User';
   
-  // Получаем имя пользователя
-  const displayName = isLocal ? userName : (usersMap[id] || id.substring(0, 6));
-  
-  log(`🎬 Видео: ${isLocal ? 'ваше' : displayName}`);
-  
-  const wrapper = document.createElement('div');
-  wrapper.className = `video-wrapper ${isLocal ? 'mirror' : ''}`;
-  wrapper.id = `video-${id}`;
-
-  const video = document.createElement('video');
-  video.srcObject = stream;
-  video.autoplay = true;
-  video.playsInline = true;
-  video.muted = isLocal;
-
-  const nameTag = document.createElement('div');
-  nameTag.className = 'user-name';
-  nameTag.textContent = isLocal ? `${userName} (Вы)` : displayName;
-
-  wrapper.appendChild(video);
-  wrapper.appendChild(nameTag);
-  document.getElementById('videosContainer').appendChild(wrapper);
-  
-  // Проверяем треки через 2 секунды
-  setTimeout(() => {
-    const audioTracks = stream.getAudioTracks();
-    const videoTracks = stream.getVideoTracks();
-    log(`📹 ${displayName}: audio=${audioTracks.length}, video=${videoTracks.length}`);
-  }, 2000);
-}
-
-async function startVideo() {
-  userName = document.getElementById('userName').value.trim() || 'User' + Math.floor(Math.random() * 1000);
-  
-  log(`🚀 Запуск как ${userName}`);
-
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ 
-      video: true, 
-      audio: { echoCancellation: true, noiseSuppression: true }
+    // Получаем доступ к микрофону и камере
+    localStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480 },
+      audio: { 
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
     });
     
     log('✅ Доступ получен');
+    log(`🎤 Аудио: ${localStream.getAudioTracks().length} трек`);
+    log(`📹 Видео: ${localStream.getVideoTracks().length} трек`);
+    
+    // Показываем своё видео
     addVideo(localStream, userName, true);
     
-    document.getElementById('loginForm').classList.add('hidden');
-    document.getElementById('videoContainer').classList.remove('hidden');
+    // Запускаем прослушивание микрофона
+    startAudioMonitoring();
     
-    socket.emit('join-room', { userName });
-    log('📤 join-room отправлено');
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('chat').style.display = 'block';
     
-    setTimeout(testMic, 2000);
+    // Подключаемся к комнате
+    socket.emit('join', { name: userName });
+    log('📤 Отправлено join');
+    
   } catch (err) {
     alert('Ошибка: ' + err.message);
   }
 }
 
-function createPC(targetId) {
-  if (peerConnections[targetId]) {
-    log(`PC для ${targetId} уже есть`);
-    return peerConnections[targetId];
+function addVideo(stream, id, isLocal) {
+  if (document.getElementById('video-' + id)) return;
+  
+  log(`🎬 Видео: ${isLocal ? 'ваше' : id}`);
+  
+  const wrap = document.createElement('div');
+  wrap.className = 'video-wrap' + (isLocal ? ' mirror' : '');
+  wrap.id = 'video-' + id;
+  
+  const video = document.createElement('video');
+  video.srcObject = stream;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.muted = isLocal;
+  
+  const label = document.createElement('div');
+  label.className = 'user-label';
+  label.textContent = isLocal ? userName + ' (Вы)' : id;
+  
+  wrap.appendChild(video);
+  wrap.appendChild(label);
+  document.getElementById('videos').appendChild(wrap);
+  
+  // Проверяем треки
+  setTimeout(() => {
+    const tracks = stream.getTracks();
+    log(`📹 ${id}: ${tracks.length} треков`);
+    tracks.forEach(t => log(`  - ${t.kind}: ${t.enabled ? 'вкл' : 'выкл'}`));
+  }, 1000);
+}
+
+// ===== ПРОСЛУШИВАНИЕ МИКРОФОНА =====
+function startAudioMonitoring() {
+  const audioTrack = localStream.getAudioTracks()[0];
+  if (!audioTrack) {
+    log('❌ Аудио трек не найден');
+    return;
   }
   
-  const userNameDisplay = usersMap[targetId] || targetId.substring(0, 6);
-  log(`🔧 Создаю PC для ${userNameDisplay} (${targetId})`);
+  log('🎤 Запуск мониторинга микрофона...');
   
-  iceBuffer[targetId] = [];
+  try {
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+    
+    const source = audioContext.createMediaStreamSource(localStream);
+    source.connect(analyser);
+    
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+    
+    log('✅ Мониторинг запущен');
+    checkAudioLevel();
+    
+  } catch (err) {
+    log('❌ Ошибка мониторинга: ' + err.message);
+  }
+}
+
+function checkAudioLevel() {
+  if (!analyser) return;
+  
+  analyser.getByteFrequencyData(dataArray);
+  
+  // Считаем средний уровень
+  let sum = 0;
+  for (let i = 0; i < dataArray.length; i++) {
+    sum += dataArray[i];
+  }
+  const average = sum / dataArray.length;
+  const peak = Math.max(...dataArray);
+  
+  // Показываем уровень
+  if (average > 0) {
+    log(`🎤 Уровень: ${Math.round(average)} (пик: ${peak})`);
+    
+    if (average > 10) {
+      log('✅ МИКРОФОН РАБОТАЕТ!');
+    }
+  }
+  
+  // Проверяем каждую секунду
+  setTimeout(checkAudioLevel, 1000);
+}
+
+function createPC(targetId) {
+  if (peerConnections[targetId]) return peerConnections[targetId];
+  
+  log(`🔧 PC для ${targetId}`);
   
   const pc = new RTCPeerConnection(rtcConfig);
   
@@ -105,182 +153,96 @@ function createPC(targetId) {
   });
   
   pc.ontrack = (e) => {
-    log(`📥 Получен ${e.track.kind} трек от ${userNameDisplay}`);
+    log(`📥 Получен ${e.track.kind} от ${targetId}`);
     addVideo(e.streams[0], targetId, false);
   };
   
   pc.onicecandidate = (e) => {
     if (e.candidate) {
-      socket.emit('ice-candidate', { targetId, candidate: e.candidate });
+      socket.emit('ice', { to: targetId, ice: e.candidate });
     }
   };
   
   pc.oniceconnectionstatechange = () => {
-    const state = pc.iceConnectionState;
-    log(`🔌 ICE ${state} (${userNameDisplay})`);
-    
-    if (state === 'connected' || state === 'completed') {
-      document.getElementById('status').textContent = '✅ Соединение установлено!';
-      document.getElementById('status').className = 'success';
-    } else if (state === 'disconnected' || state === 'failed') {
-      document.getElementById('status').textContent = '⚠️ Проблема с соединением';
-      document.getElementById('status').className = 'warning';
-    }
-  };
-  
-  pc.onconnectionstatechange = () => {
-    log(`📡 Connection: ${pc.connectionState}`);
+    log(`🔌 ICE: ${pc.iceConnectionState} (${targetId.substring(0,6)})`);
   };
   
   peerConnections[targetId] = pc;
   return pc;
 }
 
-async function addIceBuffered(peerId, candidate) {
-  if (!candidate) return;
-  
-  const pc = peerConnections[peerId];
-  
-  if (!pc || !pc.remoteDescription) {
-    if (!iceBuffer[peerId]) iceBuffer[peerId] = [];
-    iceBuffer[peerId].push(candidate);
-    return;
-  }
-  
-  try {
-    await pc.addIceCandidate(new RTCIceCandidate(candidate));
-  } catch(e) {
-    log(`ICE ошибка: ${e.message}`);
-  }
-}
-
-async function processBuffer(peerId) {
-  const candidates = iceBuffer[peerId] || [];
-  if (candidates.length === 0) return;
-  
-  log(`📋 Обработка ${candidates.length} ICE из буфера`);
-  
-  for (const c of candidates) {
-    const pc = peerConnections[peerId];
-    if (pc && pc.remoteDescription && c) {
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(c));
-      } catch(e) {}
-    }
-  }
-  iceBuffer[peerId] = [];
-}
-
 // ===== СОБЫТИЯ =====
 
-socket.on('room-users', (users) => {
+socket.on('usersList', (users) => {
   log(`👥 В комнате: ${users.length} других`);
-  
-  // Сохраняем имена
   users.forEach(u => {
-    usersMap[u.id] = u.name;
-    log(`  - ${u.name} (${u.id.substring(0,6)})`);
+    log(`  - ${u.name}`);
+    createPC(u.id);
   });
-  
-  // Создаём соединения
-  users.forEach(u => createPC(u.id));
 });
 
-socket.on('user-joined', async ({id, name}) => {
+socket.on('userJoined', async ({id, name}) => {
   log(`👤 ${name} (${id.substring(0,6)}) вошёл`);
   
-  if (id === socket.id) {
-    log('Это мы сами, пропускаем');
-    return;
-  }
-  
-  // Сохраняем имя
-  usersMap[id] = name;
-  
-  // Обновляем счётчик
-  const count = Object.keys(usersMap).length + 1;
-  document.getElementById('userCount').textContent = count;
+  if (id === socket.id) return;
   
   const pc = createPC(id);
   
   try {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    log(`📤 Offer создан`);
     
     setTimeout(() => {
-      socket.emit('offer', { targetId: id, offer: pc.localDescription });
-      log(`📤 Offer отправлен`);
-    }, 1000);
-  } catch(e) { 
-    log(`Offer error: ${e.message}`); 
-  }
+      socket.emit('offer', { to: id, offer: pc.localDescription });
+    }, 500);
+  } catch(e) { log('Offer error: ' + e.message); }
 });
 
-socket.on('offer', async ({senderId, offer}) => {
-  const senderName = usersMap[senderId] || senderId.substring(0, 6);
-  log(`📥 Offer от ${senderName}`);
+socket.on('offer', async ({from, offer}) => {
+  log(`📥 Offer от ${from.substring(0,6)}`);
   
-  const pc = createPC(senderId);
+  const pc = createPC(from);
   
   try {
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    log(`✅ Remote desc установлен`);
-    
-    await processBuffer(senderId);
-    
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
-    log(`📤 Answer создан`);
     
     setTimeout(() => {
-      socket.emit('answer', { targetId: senderId, answer: pc.localDescription });
-      log(`📤 Answer отправлен`);
-    }, 1000);
-  } catch(e) { 
-    log(`Answer error: ${e.message}`); 
-  }
+      socket.emit('answer', { to: from, answer: pc.localDescription });
+    }, 500);
+  } catch(e) { log('Answer error: ' + e.message); }
 });
 
-socket.on('answer', async ({senderId, answer}) => {
-  const senderName = usersMap[senderId] || senderId.substring(0, 6);
-  log(`📥 Answer от ${senderName}`);
+socket.on('answer', async ({from, answer}) => {
+  log(`📥 Answer от ${from.substring(0,6)}`);
   
-  const pc = peerConnections[senderId];
+  const pc = peerConnections[from];
   if (pc) {
     await pc.setRemoteDescription(new RTCSessionDescription(answer));
-    log(`✅ Remote desc (answer) установлен`);
-    await processBuffer(senderId);
   }
 });
 
-socket.on('ice-candidate', ({senderId, candidate}) => {
-  addIceBuffered(senderId, candidate);
+socket.on('ice', async ({from, ice}) => {
+  const pc = peerConnections[from];
+  if (pc && ice) {
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(ice));
+    } catch(e) {}
+  }
 });
 
-socket.on('user-left', ({id}) => {
-  const name = usersMap[id] || id.substring(0, 6);
-  log(`👤 ${name} вышел`);
-  
+socket.on('userLeft', ({id}) => {
+  log(`👤 ${id.substring(0,6)} вышел`);
   if (peerConnections[id]) {
     peerConnections[id].close();
     delete peerConnections[id];
   }
-  if (iceBuffer[id]) {
-    delete iceBuffer[id];
-  }
-  if (usersMap[id]) {
-    delete usersMap[id];
-  }
-  
-  document.getElementById(`video-${id}`)?.remove();
-  
-  const count = Object.keys(usersMap).length + 1;
-  document.getElementById('userCount').textContent = count;
+  document.getElementById('video-' + id)?.remove();
 });
 
-socket.on('update-count', (count) => {
-  document.getElementById('userCount').textContent = count;
+socket.on('count', (n) => {
+  document.getElementById('count').textContent = n;
 });
 
 // ===== УПРАВЛЕНИЕ =====
@@ -289,7 +251,8 @@ function toggleMic() {
   const track = localStream?.getAudioTracks()[0];
   if (track) {
     track.enabled = !track.enabled;
-    document.getElementById('btnMic').textContent = track.enabled ? '🎤 Микрофон ВКЛ' : '🔇 ВЫКЛ';
+    document.getElementById('btnMic').textContent = track.enabled ? '🎤 ВКЛ' : '🔇 ВЫКЛ';
+    document.getElementById('btnMic').className = track.enabled ? 'success' : 'active';
   }
 }
 
@@ -297,44 +260,13 @@ function toggleCam() {
   const track = localStream?.getVideoTracks()[0];
   if (track) {
     track.enabled = !track.enabled;
-    document.getElementById('btnCam').textContent = track.enabled ? '📷 Камера ВКЛ' : '📵 ВЫКЛ';
+    document.getElementById('btnCam').textContent = track.enabled ? '📷 ВКЛ' : '📵 ВЫКЛ';
+    document.getElementById('btnCam').className = track.enabled ? 'success' : 'active';
   }
-}
-
-function testMic() {
-  const track = localStream?.getAudioTracks()[0];
-  if (!track || !track.enabled) return;
-  
-  const ctx = new AudioContext();
-  const analyser = ctx.createAnalyser();
-  const source = ctx.createMediaStreamSource(localStream);
-  source.connect(analyser);
-  
-  const data = new Uint8Array(analyser.frequencyBinCount);
-  let checks = 0;
-  
-  function check() {
-    analyser.getByteFrequencyData(data);
-    const avg = data.reduce((a,b) => a+b) / data.length;
-    checks++;
-    
-    if (checks <= 3) {
-      log(`🎤 Уровень #${checks}: ${Math.round(avg)}`);
-      if (avg > 10) log('✅ МИКРОФОН РАБОТАЕТ!');
-    }
-    
-    setTimeout(check, 2000);
-  }
-  log('🎤 Тест микрофона...');
-  check();
 }
 
 function copyLink() {
   navigator.clipboard.writeText(window.location.origin).then(() => {
-    alert('✅ Ссылка скопирована!\n\n' + window.location.origin);
+    alert('Ссылка: ' + window.location.origin);
   });
-}
-
-function stopVideo() {
-  location.reload();
 }
